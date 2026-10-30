@@ -341,6 +341,7 @@ input[type="text"]:focus { border-color: var(--accent); }
   color: var(--accent);
   font-weight: 600;
   font-size: 0.85rem;
+  word-break: break-all;
 }
 .sync-status-box {
   font-size: 0.75rem;
@@ -366,6 +367,10 @@ input[type="text"]:focus { border-color: var(--accent); }
 .sync-dot.green {
   background: #2ECC71;
   box-shadow: 0 0 10px #2ECC71;
+}
+.sync-dot.red {
+  background: var(--danger);
+  box-shadow: 0 0 10px var(--danger);
 }
 .sync-time-box {
   font-size: 0.7rem;
@@ -857,9 +862,6 @@ const SoundEngine = {
     }
   },
 
-  // ============================================================
-  // ОРГАНИЧЕСКИЙ ASMR-МЕТРОНОМ: СЕРДЦЕБИЕНИЕ + ДЫХАНИЕ + СУБ-БАС + ШУМ
-  // ============================================================
   playMetronomeTick() {
     if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime;
@@ -873,7 +875,6 @@ const SoundEngine = {
     const beatSec = 60 / this.metronomeBPM;
     const dubDelay = Math.min(0.18, Math.max(0.10, beatSec * 0.28));
 
-    // 0. ОБЩАЯ ШИНА: сатурация для "аналоговой" теплоты
     const mix = this.ctx.createGain();
     mix.gain.value = 0.9;
 
@@ -889,7 +890,6 @@ const SoundEngine = {
     mix.connect(shaper);
     shaper.connect(this.masterGain);
 
-    // 1. СУБ-БАС "В ЖИВОТЕ": 40–45 Гц, с дыхательной модуляцией
     const sub = this.ctx.createOscillator();
     sub.type = 'sine';
     sub.frequency.setValueAtTime(44 + (Math.random() - 0.5) * 2, t);
@@ -911,7 +911,6 @@ const SoundEngine = {
     sub.connect(subGain);
     subGain.connect(mix);
 
-    // 2. СЕРДЕЧНЫЙ "LUB"
     const lub = this.ctx.createOscillator();
     lub.type = 'sine';
     lub.frequency.setValueAtTime(72 + (Math.random() - 0.5) * 4, t);
@@ -940,7 +939,6 @@ const SoundEngine = {
     lubFilter.connect(lubGain);
     lubGain.connect(mix);
 
-    // 3. СЕРДЕЧНЫЙ "DUB"
     const dubT = t + dubDelay;
     const dub = this.ctx.createOscillator();
     dub.type = 'sine';
@@ -961,7 +959,6 @@ const SoundEngine = {
     dubFilter.connect(dubGain);
     dubGain.connect(mix);
 
-    // 4. ВЛАЖНОЕ ДЫХАНИЕ / ASMR-ТЕКСТУРА
     const breathLen = 0.12;
     const breathBuf = this.ctx.createBuffer(
       1, Math.floor(this.ctx.sampleRate * breathLen), this.ctx.sampleRate
@@ -991,25 +988,23 @@ const SoundEngine = {
     breathFilter.connect(breathGain);
     breathGain.connect(mix);
 
-    // 5. НОВЫЙ СЛОЙ: НИЗКОЧАСТОТНЫЙ ШУМ (60–80 Гц) ДЛЯ "ЖИВОГО" БАСА
     const subNoise = this.ctx.createBufferSource();
-    subNoise.buffer = breathBuf; // Переиспользуем буфер дыхания
+    subNoise.buffer = breathBuf;
 
     const subNoiseFilter = this.ctx.createBiquadFilter();
     subNoiseFilter.type = 'lowpass';
-    subNoiseFilter.frequency.setValueAtTime(80, t); // Отсекаем всё выше 80 Гц
+    subNoiseFilter.frequency.setValueAtTime(80, t);
     subNoiseFilter.Q.value = 0.5;
 
     const subNoiseGain = this.ctx.createGain();
     subNoiseGain.gain.setValueAtTime(0.0001, t);
-    subNoiseGain.gain.linearRampToValueAtTime(0.02, t + 0.01); // Очень тихо
-    subNoiseGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.35); // Длинный, "дышащий" хвост
+    subNoiseGain.gain.linearRampToValueAtTime(0.02, t + 0.01);
+    subNoiseGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
 
     subNoise.connect(subNoiseFilter);
     subNoiseFilter.connect(subNoiseGain);
     subNoiseGain.connect(mix);
 
-    // 6. БИНАУРАЛЬНЫЙ РИТМ 9 Гц
     const binL = this.ctx.createOscillator();
     const binR = this.ctx.createOscillator();
     binL.type = 'sine';
@@ -1033,7 +1028,6 @@ const SoundEngine = {
     binPanR.connect(binGain);
     binGain.connect(this.masterGain);
 
-    // СТАРТ / СТОП
     breathLfo.start(t);   breathLfo.stop(t + 0.42);
     sub.start(t);         sub.stop(t + 0.42);
     drift.start(t);       drift.stop(t + 0.26);
@@ -1046,19 +1040,73 @@ const SoundEngine = {
   }
 };
 
+// ============================================================================
+// ОБНОВЛЕННЫЙ СЕТЕВОЙ ДВИЖОК С ЗАЩИТОЙ ОТ СБОЕВ И ТАЙМАУТАМИ
+// ============================================================================
 const NetworkEngine = {
   peer: null,
   conn: null,
   myId: null,
   friendId: null,
   heartbeatInterval: null,
+  retryTimeout: null,
+  initAttempts: 0,
+  maxAttempts: 5,
 
   init() {
-    const randomId = 'kolba-' + Math.random().toString(36).substring(2, 8);
-    this.peer = new Peer(randomId);
+    if (this.retryTimeout) clearTimeout(this.retryTimeout);
+    if (this.peer) {
+      try { this.peer.destroy(); } catch(e){}
+      this.peer = null;
+    }
+
+    const idDisplay = document.getElementById('syncMyId');
+    const statusDisplay = document.getElementById('syncInfoText');
+    const dot = document.getElementById('syncStatusDot');
+
+    if (this.initAttempts >= this.maxAttempts) {
+      if(idDisplay) idDisplay.textContent = 'Ошибка сети';
+      if(statusDisplay) statusDisplay.textContent = 'Нажмите "Пригласить" для повтора';
+      if(dot) dot.className = 'sync-dot red';
+      return;
+    }
+
+    this.initAttempts++;
     
+    if (this.initAttempts > 1) {
+      if(idDisplay) idDisplay.textContent = `Генерация... (Попытка ${this.initAttempts})`;
+      if(statusDisplay) statusDisplay.textContent = 'Переподключение...';
+    } else {
+      if(idDisplay) idDisplay.textContent = 'Генерация...';
+      if(statusDisplay) statusDisplay.textContent = 'Ожидание...';
+    }
+
+    const randomId = 'kolba-' + Math.random().toString(36).substring(2, 8);
+    
+    // Добавляем STUN-серверы для лучшего соединения P2P
+    this.peer = new Peer(randomId, {
+      debug: 1,
+      config: {
+        'iceServers': [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' }
+        ]
+      }
+    });
+
+    // Таймаут на случай, если публичный сервер PeerJS завис
+    this.retryTimeout = setTimeout(() => {
+      if (!this.myId) {
+        console.warn('Таймаут подключения к серверу сигнализации. Пробуем снова...');
+        this.init();
+      }
+    }, 8000); // Ждем 8 секунд
+
     this.peer.on('open', (id) => {
+      clearTimeout(this.retryTimeout);
       this.myId = id;
+      this.initAttempts = 0; // Сбрасываем счетчик при успехе
       this.updateUI();
       
       const hash = window.location.hash.replace('#', '');
@@ -1079,7 +1127,11 @@ const NetworkEngine = {
 
     this.peer.on('error', (err) => {
       console.error('PeerJS error:', err);
-      if (err.type === 'peer-unavailable') alert('Друг не найден. Проверьте ссылку.');
+      if (err.type === 'peer-unavailable') {
+        alert('Друг не найден. Проверьте ссылку. Возможно, он ещё не открыл страницу.');
+      } else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) {
+        this.init(); // Автоматический перезапуск при сбое сети
+      }
     });
   },
 
@@ -1262,6 +1314,7 @@ const NetworkEngine = {
       const initial = this.myId.split('-')[1].charAt(0).toUpperCase();
       myAvatar.textContent = initial;
       myIdEl.textContent = this.myId;
+      dot.className = 'sync-dot grey'; // По умолчанию ждем
     } else {
       myAvatar.textContent = '∞';
       myIdEl.textContent = 'Генерация...';
@@ -1279,8 +1332,13 @@ const NetworkEngine = {
         friendAvatar.classList.add('active');
       }
     } else {
-      dot.className = 'sync-dot grey';
-      text.textContent = 'Ожидание...';
+      if (this.initAttempts >= this.maxAttempts) {
+         dot.className = 'sync-dot red';
+         text.textContent = 'Сбой сети';
+      } else {
+         dot.className = 'sync-dot grey';
+         text.textContent = 'Ожидание...';
+      }
       copyBtn.style.display = 'block';
       disconnectBtn.style.display = 'none';
       timeBox.style.display = 'none';
@@ -1419,10 +1477,15 @@ function updateSurfaceTarget() {
   surface.forEach(p => { p.targetY = targetY; });
 }
 
+// ИСПРАВЛЕНО: Не забиваем стек отмены, если это перелив
 function addEmotion(id, ml, isRemote = false, isPour = false) {
   const add = Math.max(1, ml);
-  undoStack.push(JSON.parse(JSON.stringify(current)));
-  if (undoStack.length > 25) undoStack.shift();
+  
+  if (!isPour) {
+    undoStack.push(JSON.parse(JSON.stringify(current)));
+    if (undoStack.length > 25) undoStack.shift();
+  }
+  
   current[id] = (current[id] || 0) + add;
   spawnSplash(id, add);
   updateSurfaceTarget();
@@ -1978,7 +2041,11 @@ document.getElementById('bpmSlider').oninput = (e) => {
 
 document.getElementById('copyLinkBtn').onclick = () => {
   SoundEngine.playClick();
-  if (!NetworkEngine.myId) return;
+  if (!NetworkEngine.myId) {
+    // Если ID ещё не сгенерирован (например, из-за ошибки), перезапускаем подключение
+    NetworkEngine.init();
+    return;
+  }
   const url = window.location.origin + window.location.pathname + '#' + NetworkEngine.myId;
   navigator.clipboard.writeText(url).then(() => {
     const btn = document.getElementById('copyLinkBtn');
