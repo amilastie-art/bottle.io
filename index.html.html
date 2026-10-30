@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Колба Дня</title>
-<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/@metered-ca/realtime@1/dist/index.umd.js"></script>
 <style>
 :root {
   --bg: #090b10;
@@ -488,7 +488,7 @@ input[type="text"]:focus { border-color: var(--accent); }
         </div>
         <div class="sync-info">
           <div class="sync-myid" id="syncMyIdDisplay">
-            Мой ID:
+            Комната:
             <span id="syncMyId">Генерация...</span>
           </div>
           <div class="sync-status-box">
@@ -1041,177 +1041,89 @@ const SoundEngine = {
 };
 
 // ============================================================================
-// ОБНОВЛЕННЫЙ СЕТЕВОЙ ДВИЖОК С ЗАЩИТОЙ ОТ СБОЕВ И ТАЙМАУТАМИ
+// СЕТЕВОЙ ДВИЖОК НА METERED REALTIME (чистый браузер, без своего сервера)
 // ============================================================================
 const NetworkEngine = {
   peer: null,
-  conn: null,
+  room: null,
   myId: null,
-  friendId: null,
-  heartbeatInterval: null,
-  retryTimeout: null,
-  initAttempts: 0,
-  maxAttempts: 5,
+  connected: false,
+  apiKey: localStorage.getItem('meteredApiKey') || '',
 
-  init() {
-    if (this.retryTimeout) clearTimeout(this.retryTimeout);
-    if (this.peer) {
-      try { this.peer.destroy(); } catch(e){}
-      this.peer = null;
-    }
-
+  async init() {
     const idDisplay = document.getElementById('syncMyId');
     const statusDisplay = document.getElementById('syncInfoText');
     const dot = document.getElementById('syncStatusDot');
 
-    if (this.initAttempts >= this.maxAttempts) {
-      if(idDisplay) idDisplay.textContent = 'Ошибка сети';
-      if(statusDisplay) statusDisplay.textContent = 'Нажмите "Пригласить" для повтора или работайте локально';
-      if(dot) dot.className = 'sync-dot red';
+    if (!this.apiKey) {
+      this.apiKey = prompt(
+        'Введите бесплатный ключ Metered (pk_live_...).\n\n' +
+        '1. Зарегистрируйтесь на https://dashboard.metered.ca\n' +
+        '2. Realtime Messaging → API Keys → Create key (Publishable)\n' +
+        '3. Обязательно поставьте галочку "Send"\n' +
+        '4. Скопируйте ключ и вставьте сюда',
+        ''
+      ) || '';
+      if (this.apiKey) localStorage.setItem('meteredApiKey', this.apiKey);
+    }
+
+    if (!this.apiKey || !this.apiKey.startsWith('pk_')) {
+      if (idDisplay) idDisplay.textContent = 'Нужен ключ';
+      if (statusDisplay) statusDisplay.textContent = 'Нажмите Пригласить и введите ключ';
+      if (dot) dot.className = 'sync-dot red';
       return;
     }
 
-    this.initAttempts++;
-    
-    if (this.initAttempts > 1) {
-      if(idDisplay) idDisplay.textContent = `Генерация... (Попытка ${this.initAttempts}/5)`;
-      if(statusDisplay) statusDisplay.textContent = 'Переподключение к PeerJS...';
-    } else {
-      if(idDisplay) idDisplay.textContent = 'Генерация ID...';
-      if(statusDisplay) statusDisplay.textContent = 'Подключение к серверу сигнализации...';
+    try {
+      if (idDisplay) idDisplay.textContent = 'Подключение...';
+      if (statusDisplay) statusDisplay.textContent = 'К Metered Realtime...';
+      if (dot) dot.className = 'sync-dot grey';
+
+      this.peer = new MeteredPeer.MeteredPeer({ apiKey: this.apiKey });
+
+      this.peer.on('data', ({ data }) => {
+        this.updateSyncTime();
+        this.handleData(data);
+      });
+
+      this.peer.on('peer-joined', () => this.updateUI());
+      this.peer.on('peer-left', () => this.updateUI());
+
+      // Комната из хэша или новая
+      const hash = window.location.hash.replace('#', '').trim();
+      this.room = hash || ('kolba-' + Math.random().toString(36).slice(2, 8));
+      if (!hash) history.replaceState(null, '', '#' + this.room);
+
+      await this.peer.join(this.room);
+      this.connected = true;
+      this.myId = this.peer.peerId || this.room;
+      this.updateUI();
+      this.syncState(); // отправить текущее состояние новым участникам
+    } catch (e) {
+      console.error('Metered init error', e);
+      if (idDisplay) idDisplay.textContent = 'Ошибка';
+      if (statusDisplay) statusDisplay.textContent = e.message || 'Не удалось подключиться';
+      if (dot) dot.className = 'sync-dot red';
+      this.connected = false;
     }
-
-    // НЕ задаём свой ID — пусть сервер PeerJS сгенерирует надёжный
-    // Явно указываем хост (по умолчанию 0.peerjs.com) + secure + path
-    this.peer = new Peer({
-      debug: 1,
-      host: '0.peerjs.com',
-      port: 443,
-      path: '/',
-      secure: true,
-      config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' },
-          { urls: 'stun:stun3.l.google.com:19302' },
-          { urls: 'stun:stun4.l.google.com:19302' }
-        ]
-      }
-    });
-
-    // Таймаут увеличен: облачный сервер PeerJS иногда отвечает очень долго
-    this.retryTimeout = setTimeout(() => {
-      if (!this.myId) {
-        console.warn('Таймаут подключения к серверу сигнализации. Пробуем снова...');
-        this.init();
-      }
-    }, 20000); // 20 секунд
-
-    this.peer.on('open', (id) => {
-      clearTimeout(this.retryTimeout);
-      this.myId = id;
-      this.initAttempts = 0;
-      this.updateUI();
-      
-      const hash = window.location.hash.replace('#', '');
-      // Убрали проверку startsWith('kolba-'), потому что ID теперь генерирует сервер
-      if (hash && hash !== id && hash.length > 4) {
-        this.connect(hash);
-      }
-    });
-
-    this.peer.on('connection', (conn) => {
-      if (this.conn) { conn.close(); return; }
-      this.conn = conn;
-      this.friendId = conn.peer;
-      this.setupConnection();
-      this.updateUI();
-      this.syncState();
-      this.startHeartbeat();
-    });
-
-    this.peer.on('error', (err) => {
-      console.error('PeerJS error:', err.type, err);
-      if (err.type === 'peer-unavailable') {
-        alert('Друг не найден. Проверьте ссылку. Возможно, он ещё не открыл страницу или ID устарел.');
-      } else if (err.type === 'unavailable-id') {
-        // Редко, но если произошло — просто перезапускаем
-        this.init();
-      } else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) {
-        setTimeout(() => this.init(), 1500);
-      }
-    });
-  },
-
-  connect(friendId) {
-    if (!friendId || this.conn) return;
-    this.conn = this.peer.connect(friendId, { reliable: true });
-    
-    this.conn.on('open', () => {
-      this.friendId = friendId;
-      this.setupConnection();
-      this.updateUI();
-      this.startHeartbeat();
-    });
-    
-    this.conn.on('error', (err) => {
-      console.error(err);
-      alert('Не удалось подключиться. Возможно, ссылка устарела.');
-      this.conn = null;
-      this.updateUI();
-    });
-  },
-
-  setupConnection() {
-    if (!this.conn) return;
-    this.conn.on('data', (data) => {
-      this.updateSyncTime();
-      this.handleData(data);
-    });
-    this.conn.on('close', () => {
-      this.conn = null;
-      this.friendId = null;
-      this.stopHeartbeat();
-      this.updateUI();
-    });
   },
 
   send(data) {
-    if (this.conn && this.conn.open) {
-      this.conn.send(data);
-    }
-  },
-
-  startHeartbeat() {
-    this.stopHeartbeat();
-    this.heartbeatInterval = setInterval(() => {
-      if (this.conn && this.conn.open) {
-        this.send({ type: 'ping' });
-      }
-    }, 4000);
-  },
-
-  stopHeartbeat() {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
+    if (this.peer && this.connected) {
+      this.peer.send(data).catch(err => console.warn('send failed', err));
     }
   },
 
   handleData(data) {
-    if (data.type === 'ping') {
-      this.send({ type: 'pong' });
-    }
-    else if (data.type === 'pong') {
-    }
-    else if (data.type === 'sync_state') {
-      current = data.current;
-      undoStack = data.undoStack;
-      
+    if (!data || !data.type) return;
+
+    if (data.type === 'sync_state') {
+      current = data.current || {};
+      undoStack = data.undoStack || [];
+
       Object.keys(SoundEngine.layers).forEach(k => SoundEngine.stopLayer(k));
       document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
-      
+
       if (data.activeLayers) {
         data.activeLayers.forEach(l => {
           if (!SoundEngine.activeLayers.has(l)) {
@@ -1227,7 +1139,6 @@ const NetworkEngine = {
         document.getElementById('bpmSlider').value = data.bpm;
         document.getElementById('bpmDisplay').textContent = data.bpm + ' BPM';
       }
-      
       if (data.volume !== undefined) {
         SoundEngine.setVolume(data.volume, true);
         document.getElementById('volumeSlider').value = data.volume * 100;
@@ -1242,7 +1153,7 @@ const NetworkEngine = {
       save();
       updateStats();
       updateUI();
-    } 
+    }
     else if (data.type === 'add_emotion') {
       addEmotion(data.id, data.ml, true, data.isPour);
       if (!data.isPour) SoundEngine.playPress();
@@ -1250,10 +1161,8 @@ const NetworkEngine = {
     else if (data.type === 'toggle_layer') {
       if (data.active) SoundEngine.startLayer(data.layer);
       else SoundEngine.stopLayer(data.layer);
-      
       const btn = document.querySelector(`.layer-btn[data-layer="${data.layer}"]`);
       if (btn) btn.classList.toggle('active', data.active);
-      
       if (data.layer === 'metronome') {
         document.getElementById('bpmSlider').disabled = !data.active;
       }
@@ -1287,8 +1196,8 @@ const NetworkEngine = {
   syncState() {
     this.send({
       type: 'sync_state',
-      current: current,
-      undoStack: undoStack,
+      current,
+      undoStack,
       activeLayers: Array.from(SoundEngine.activeLayers),
       bpm: SoundEngine.metronomeBPM,
       volume: SoundEngine.volume,
@@ -1310,53 +1219,37 @@ const NetworkEngine = {
     const text = document.getElementById('syncInfoText');
     const myIdEl = document.getElementById('syncMyId');
     const timeBox = document.getElementById('syncTimeBox');
-    
     const myAvatar = document.getElementById('myAvatar');
     const friendAvatar = document.getElementById('friendAvatar');
-    
     const copyBtn = document.getElementById('copyLinkBtn');
     const disconnectBtn = document.getElementById('syncDisconnectBtn');
 
     if (!dot) return;
 
-    if (this.myId) {
-      const initial = this.myId.split('-')[1].charAt(0).toUpperCase();
-      myAvatar.textContent = initial;
-      myIdEl.textContent = this.myId;
-      dot.className = 'sync-dot grey'; // По умолчанию ждем
-    } else {
-      myAvatar.textContent = '∞';
-      myIdEl.textContent = 'Генерация...';
-    }
-
-    if (this.conn && this.conn.open) {
+    if (this.connected && this.room) {
+      myIdEl.textContent = this.room;
+      myAvatar.textContent = this.room.slice(-1).toUpperCase();
       dot.className = 'sync-dot green';
       text.textContent = 'В комнате';
-      copyBtn.style.display = 'none';
+      copyBtn.style.display = 'block';
+      copyBtn.textContent = 'Копировать ссылку';
       disconnectBtn.style.display = 'block';
-      
-      if (this.friendId) {
-        const friendInitial = this.friendId.split('-')[1].charAt(0).toUpperCase();
-        friendAvatar.textContent = friendInitial;
-        friendAvatar.classList.add('active');
-      }
+      friendAvatar.textContent = '👥';
+      friendAvatar.classList.add('active');
     } else {
-      if (this.initAttempts >= this.maxAttempts) {
-         dot.className = 'sync-dot red';
-         text.textContent = 'Сбой сети';
-      } else {
-         dot.className = 'sync-dot grey';
-         text.textContent = 'Ожидание...';
-      }
+      myIdEl.textContent = this.room || 'Нет комнаты';
+      myAvatar.textContent = '∞';
+      dot.className = 'sync-dot grey';
+      text.textContent = this.apiKey ? 'Ожидание...' : 'Нужен ключ Metered';
       copyBtn.style.display = 'block';
       disconnectBtn.style.display = 'none';
       timeBox.style.display = 'none';
-      
       friendAvatar.textContent = '∞';
       friendAvatar.classList.remove('active');
     }
   }
 };
+
 
 const DEFAULT_EMOTIONS = [
   { id: 'joy', name: 'Радость', color: '#FFD700', quote: 'Счастье — это гармония между тем, что ты думаешь, говоришь и делаешь.', insight: 'Сегодня вы излучаете позитив. Поделитесь этой энергией с окружающими — улыбка заразительна!' },
@@ -2050,12 +1943,11 @@ document.getElementById('bpmSlider').oninput = (e) => {
 
 document.getElementById('copyLinkBtn').onclick = () => {
   SoundEngine.playClick();
-  if (!NetworkEngine.myId) {
-    // Если ID ещё не сгенерирован (например, из-за ошибки), перезапускаем подключение
+  if (!NetworkEngine.connected) {
     NetworkEngine.init();
     return;
   }
-  const url = window.location.origin + window.location.pathname + '#' + NetworkEngine.myId;
+  const url = window.location.origin + window.location.pathname + '#' + NetworkEngine.room;
   navigator.clipboard.writeText(url).then(() => {
     const btn = document.getElementById('copyLinkBtn');
     const originalText = btn.textContent;
@@ -2065,11 +1957,10 @@ document.getElementById('copyLinkBtn').onclick = () => {
 };
 
 document.getElementById('syncDisconnectBtn').onclick = () => {
-  if (NetworkEngine.conn) {
-    NetworkEngine.conn.close();
-    NetworkEngine.conn = null;
-    NetworkEngine.friendId = null;
-    NetworkEngine.stopHeartbeat();
+  if (NetworkEngine.peer) {
+    NetworkEngine.peer.close();
+    NetworkEngine.peer = null;
+    NetworkEngine.connected = false;
     NetworkEngine.updateUI();
   }
 };
