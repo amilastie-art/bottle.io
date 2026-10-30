@@ -1,0 +1,2002 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Колба Дня</title>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<style>
+:root {
+  --bg: #090b10;
+  --surface: rgba(22, 29, 40, 0.65);
+  --surface-hover: rgba(30, 38, 52, 0.8);
+  --text: #f0f4f8;
+  --muted: #94a3b8;
+  --accent: #5eead4;
+  --border: rgba(255, 255, 255, 0.08);
+  --glow: rgba(94, 234, 212, 0.15);
+  --danger: #ef4444;
+}
+[data-theme="light"] {
+  --bg: #e2e8f0;
+  --surface: rgba(255, 255, 255, 0.7);
+  --surface-hover: rgba(255, 255, 255, 0.9);
+  --text: #0f172a;
+  --muted: #64748b;
+  --accent: #0d9488;
+  --border: rgba(0, 0, 0, 0.05);
+  --glow: rgba(13, 148, 136, 0.1);
+  --danger: #dc2626;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  transition: background .3s, color .3s;
+  overflow-x: hidden;
+  background-image: radial-gradient(circle at 50% 0%, var(--glow) 0%, transparent 50%);
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.logo { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px; }
+.logo span { color: var(--accent); }
+.header-right { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.time { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
+button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all .2s ease;
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+button:hover { 
+  background: var(--surface-hover); 
+  border-color: var(--accent);
+  box-shadow: 0 0 15px var(--glow);
+}
+button.danger-btn {
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+button.danger-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--danger);
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+}
+.main {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 30px;
+  padding: 30px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+@media (max-width: 960px) { .main { grid-template-columns: 1fr; } }
+.flask-wrap { display: flex; flex-direction: column; align-items: center; gap: 20px; position: relative; width: 100%; }
+
+.canvas-container {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  height: 560px;
+}
+#flaskCanvas {
+  width: 100%;
+  height: 100%;
+  border-radius: 24px;
+  cursor: crosshair;
+  transition: transform 0.3s ease;
+}
+#flaskCanvas:hover { transform: scale(1.01); }
+
+.flask-fill-text {
+  position: absolute;
+  top: 55%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+  z-index: 10;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  transition: all 0.4s ease;
+}
+.flask-fill-text .pct-wrap {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.flask-fill-text .pct-wrap span:first-child {
+  font-size: 5rem;
+  font-weight: 800;
+  color: var(--text);
+  text-shadow: 0 0 25px var(--accent);
+  line-height: 0.9;
+  letter-spacing: -2px;
+  transition: text-shadow 0.3s ease;
+}
+.flask-fill-text .percent-sign {
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-shadow: 0 0 15px var(--accent);
+  margin-top: 8px;
+}
+.flask-fill-text .vol-text {
+  font-size: 1rem;
+  color: var(--text);
+  font-weight: 600;
+  margin-top: 4px;
+  letter-spacing: 1px;
+  background: rgba(0,0,0,0.3);
+  padding: 4px 14px;
+  border-radius: 12px;
+  display: inline-block;
+  backdrop-filter: blur(4px);
+  border: 1px solid var(--border);
+}
+[data-theme="light"] .flask-fill-text .pct-wrap span:first-child {
+  color: #0f172a;
+}
+[data-theme="light"] .flask-fill-text .vol-text {
+  background: rgba(255,255,255,0.6);
+}
+
+.controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 480px; }
+.emotion-btn {
+  padding: 9px 16px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  min-width: 95px;
+  position: relative;
+  user-select: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition: all .2s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(4px);
+}
+.emotion-btn:hover { transform: translateY(-2px); background: var(--surface-hover); }
+.emotion-btn.dominant {
+  box-shadow: 0 0 15px currentColor;
+  border-color: currentColor;
+  background: rgba(255,255,255,0.05);
+  animation: pulse-border 2s infinite;
+}
+@keyframes pulse-border {
+  0% { box-shadow: 0 0 5px currentColor; }
+  50% { box-shadow: 0 0 20px currentColor; }
+  100% { box-shadow: 0 0 5px currentColor; }
+}
+.side { display: flex; flex-direction: column; gap: 20px; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 20px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s;
+}
+.card:hover { border-color: rgba(255,255,255,0.15); }
+.card h3 { 
+  font-size: 0.85rem; margin-bottom: 12px; color: var(--muted); 
+  font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
+}
+.stat-row { display: flex; justify-content: space-between; font-size: 0.9rem; margin: 8px 0; font-weight: 500;}
+.bar { height: 6px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden; margin-top: 4px; }
+.bar-fill { height: 100%; border-radius: 4px; transition: width .5s cubic-bezier(0.4, 0, 0.2, 1); }
+
+.toggle-stats-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px;
+  font-size: 0.75rem;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--muted);
+  transition: 0.2s;
+  font-weight: 600;
+}
+.toggle-stats-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+}
+
+.quote-card {
+  background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
+  border-left: 4px solid var(--accent);
+  position: relative;
+  overflow: hidden;
+}
+.quote-card::before {
+  content: '“'; position: absolute; top: -20px; right: 10px;
+  font-size: 120px; font-family: serif; color: rgba(255,255,255,0.05); line-height: 1; pointer-events: none;
+}
+.quote-text { font-size: 1.1rem; line-height: 1.6; font-style: italic; font-weight: 400; position: relative; z-index: 1; }
+.quote-author { margin-top: 12px; font-size: 0.8rem; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.insight-text { font-size: 0.9rem; color: var(--muted); line-height: 1.6; }
+.insight-highlight { color: var(--text); font-weight: 600; }
+.modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+  display: none; align-items: center; justify-content: center; z-index: 100;
+  backdrop-filter: blur(5px);
+}
+.modal.show { display: flex; }
+.modal-content {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 24px;
+  max-width: 520px; width: 92%; max-height: 85vh; overflow: auto;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
+.gallery-item { padding: 12px; border-radius: 12px; cursor: pointer; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s;}
+.gallery-item:hover { background: var(--surface-hover); }
+.color-dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; margin-right: 8px; vertical-align: middle;}
+input[type="color"] { width: 44px; height: 36px; border: none; background: none; cursor: pointer; border-radius: 8px; }
+input[type="text"] { background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 10px; width: 100%; outline: none;}
+input[type="text"]:focus { border-color: var(--accent); }
+.editor-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; max-height: 300px; overflow-y: auto; padding-right: 5px;}
+.editor-item { 
+  display: flex; justify-content: space-between; align-items: center; 
+  padding: 10px 14px; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px solid var(--border);
+}
+.editor-item-name { display: flex; align-items: center; font-weight: 500; font-size: 0.95rem;}
+.del-btn { 
+  background: transparent; border: none; color: var(--muted); cursor: pointer; 
+  padding: 4px; border-radius: 6px; transition: all 0.2s; display: flex; align-items: center; justify-content: center;
+}
+.del-btn:hover { color: var(--danger); background: rgba(239, 68, 68, 0.1); box-shadow: none; border: none;}
+.audio-hint { font-size: 0.72rem; color: var(--muted); margin-top: 4px; text-align: center; max-width: 480px; }
+
+.sync-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 260px;
+  z-index: 10;
+}
+.sync-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.sync-avatars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.avatar-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--muted);
+  transition: all 0.3s ease;
+}
+.avatar-box.me {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.avatar-box.friend.active {
+  border-color: #2ECC71;
+  color: #2ECC71;
+  box-shadow: 0 0 10px rgba(46, 204, 113, 0.2);
+}
+.sync-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+.sync-myid {
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: rgba(0,0,0,0.2);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-family: monospace;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sync-myid span {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.sync-status-box {
+  font-size: 0.75rem;
+  background: rgba(0,0,0,0.2);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+.sync-dot.grey {
+  background: var(--muted);
+  box-shadow: 0 0 6px var(--muted);
+}
+.sync-dot.green {
+  background: #2ECC71;
+  box-shadow: 0 0 10px #2ECC71;
+}
+.sync-time-box {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-align: center;
+  background: rgba(0,0,0,0.1);
+  padding: 6px;
+  border-radius: 6px;
+}
+.sync-time-box span {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.audio-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.audio-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.icon-btn {
+  padding: 8px;
+  border-radius: 10px;
+  font-size: 1rem;
+  width: 36px;
+  height: 36px;
+}
+.vol-slider {
+  flex: 1;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.audio-layers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.audio-layers .layer-btn {
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  border-radius: 8px;
+  min-width: 0;
+}
+.audio-layers .layer-btn.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+.audio-metronome {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.metronome-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.metronome-header button {
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  border-radius: 8px;
+}
+.metronome-header button.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+.bpm-display {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 600;
+  transition: color 0.1s, transform 0.1s;
+}
+.bpm-display.pulse {
+  color: var(--accent);
+  transform: scale(1.1);
+}
+.bpm-slider {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.bpm-slider:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Колба <span>Дня</span></div>
+  <div class="header-right">
+    <div class="time" id="datetime"></div>
+    <button id="themeBtn">Тёмная</button>
+    <button id="newFlaskBtn">Новая колба</button>
+  </div>
+</header>
+
+<div class="main">
+  <div class="flask-wrap">
+    
+    <div class="sync-panel" id="syncPanel">
+      <div class="sync-row">
+        <div class="sync-avatars">
+          <div class="avatar-box me" id="myAvatar" title="Вы">∞</div>
+          <div class="avatar-box friend" id="friendAvatar" title="Друг">∞</div>
+        </div>
+        <div class="sync-info">
+          <div class="sync-myid" id="syncMyIdDisplay">
+            Мой ID:
+            <span id="syncMyId">Генерация...</span>
+          </div>
+          <div class="sync-status-box">
+            <span class="sync-dot grey" id="syncStatusDot"></span>
+            <span id="syncInfoText">Ожидание...</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="sync-time-box" id="syncTimeBox" style="display:none;">
+        Синхр.: <span id="syncTimeText">--:--:--</span>
+      </div>
+
+      <div style="display:flex; gap:8px;">
+        <button id="copyLinkBtn" style="flex:1; font-size:0.75rem; padding: 6px; background: var(--accent); color: #000; font-weight: 600; border: none;">Пригласить</button>
+        <button id="syncDisconnectBtn" class="danger-btn" style="display:none; font-size:0.75rem; padding: 6px;">Отключиться</button>
+      </div>
+    </div>
+
+    <div class="canvas-container">
+      <canvas id="flaskCanvas"></canvas>
+      <div class="flask-fill-text" id="flaskFillText">
+        <div class="pct-wrap">
+          <span id="flaskPct">0</span>
+          <span class="percent-sign">%</span>
+        </div>
+        <div class="vol-text" id="flaskVolText">0 мл</div>
+      </div>
+    </div>
+
+    <div class="controls" id="emotionButtons"></div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+      <button id="undoBtn">Отменить</button>
+      <button id="editorBtn">Редактор эмоций</button>
+      <button id="exportBtn">Сохранить PNG</button>
+      <button id="galleryBtn">История</button>
+    </div>
+    <div class="audio-hint">Фоновые слои: α — фокус, θ — покой, дрон — тепло, дождь — ASMR, 18+ — экспериментальный телесный слой.</div>
+  </div>
+  
+  <div class="side">
+    <div class="card audio-card">
+      <h3>Звуки</h3>
+      <div class="audio-top-row">
+        <button id="muteBtn" class="icon-btn" title="Вкл/выкл звук">🔊</button>
+        <button id="clickSoundBtn" class="icon-btn" title="Звуки нажатий">🔔</button>
+        <input type="range" id="volumeSlider" min="0" max="100" value="60" class="vol-slider">
+      </div>
+      
+      <div class="audio-layers">
+        <button class="layer-btn" data-layer="alpha" title="Альфа-волны ~10 Гц">α</button>
+        <button class="layer-btn" data-layer="theta" title="Тета-волны ~6 Гц">θ</button>
+        <button class="layer-btn" data-layer="drone" title="Мягкий дрон">дрон</button>
+        <button class="layer-btn" data-layer="rain" title="Тихий дождь">дождь</button>
+        <button class="layer-btn" data-layer="arousal" title="18+ экспериментальный слой" style="color:#f472b6; border-color:#f472b6;">18+</button>
+      </div>
+
+      <div class="audio-metronome">
+        <div class="metronome-header">
+          <button class="layer-btn" data-layer="metronome">Метроном</button>
+          <span class="bpm-display" id="bpmDisplay">60 BPM</span>
+        </div>
+        <input type="range" id="bpmSlider" min="40" max="160" value="60" class="bpm-slider" disabled>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Статистика дня</h3>
+      <div id="statsContent">Пустая колба</div>
+    </div>
+    <div class="card quote-card" id="quoteCard" style="display:none;">
+      <div class="quote-text" id="quoteText"></div>
+      <div class="quote-author" id="quoteAuthor"></div>
+    </div>
+    <div class="card">
+      <h3>Психологический инсайт</h3>
+      <div class="insight-text" id="insightText">Добавляйте эмоции, чтобы наполнить колбу. Здесь появится персональный совет на основе вашего дня.</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="galleryModal">
+  <div class="modal-content">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h3 style="font-size:1.2rem; color:var(--text); margin:0;">История колб</h3>
+      <button id="clearHistoryBtn" class="danger-btn" style="padding:6px 10px; font-size:0.75rem;">Очистить</button>
+    </div>
+    <div id="galleryList"></div>
+    <button style="margin-top:20px; width:100%;" onclick="document.getElementById('galleryModal').classList.remove('show')">Закрыть</button>
+  </div>
+</div>
+
+<div class="modal" id="editorModal">
+  <div class="modal-content">
+    <h3 style="margin-bottom:16px; font-size:1.2rem; color:var(--text);">Редактор эмоций</h3>
+    <div class="editor-list" id="editorList"></div>
+    <div style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 10px;">
+      <h4 style="font-size:0.9rem; margin-bottom:12px; color:var(--muted);">Добавить новую:</h4>
+      <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px;">
+        <input type="text" id="customName" placeholder="Название эмоции...">
+        <input type="color" id="customColor" value="#ff6b9d">
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button id="saveCustom" style="flex:1; background:var(--accent); color:#000; border:none; font-weight:600;">Добавить</button>
+        <button onclick="document.getElementById('editorModal').classList.remove('show')" style="flex:1;">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const MAX_ML = 12000; 
+const DROP_ML = 5;    
+const POUR_RATE = 15; 
+
+let statsExpanded = false;
+
+const SoundEngine = {
+  ctx: null,
+  masterGain: null,
+  muted: false,
+  volume: 0.6,
+  layers: {},
+  activeLayers: new Set(),
+  interfaceSounds: true,
+  metronomeInterval: null,
+  metronomeBPM: 60,
+
+  init() {
+    if (this.ctx) return;
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.masterGain = this.ctx.createGain();
+    this.masterGain.gain.value = this.volume;
+    this.masterGain.connect(this.ctx.destination);
+  },
+
+  setVolume(v, isRemote = false) {
+    this.volume = v;
+    if (this.masterGain) {
+      this.masterGain.gain.setTargetAtTime(this.muted ? 0 : v, this.ctx.currentTime, 0.05);
+    }
+    if (!isRemote) {
+      NetworkEngine.send({ type: 'sync_volume', volume: v });
+    }
+  },
+
+  toggleMute(isRemote = false) {
+    this.muted = !this.muted;
+    if (this.masterGain) {
+      this.masterGain.gain.setTargetAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime, 0.05);
+    }
+    if (!isRemote) {
+      NetworkEngine.send({ type: 'sync_mute', muted: this.muted });
+    }
+    return this.muted;
+  },
+
+  toggleInterfaceSounds() {
+    this.interfaceSounds = !this.interfaceSounds;
+    return this.interfaceSounds;
+  },
+
+  playPress() {
+    if (!this.ctx || this.muted || !this.interfaceSounds) return;
+    const t = this.ctx.currentTime;
+
+    const roots = [261.63, 293.66, 329.63, 392.00, 440.00];
+    const root = roots[Math.floor(Math.random() * roots.length)];
+
+    const intervals = [1.5, 1.5, 1.5, 1.333, 2, 1.25];
+    const second = root * intervals[Math.floor(Math.random() * intervals.length)];
+
+    const osc1 = this.ctx.createOscillator();
+    const osc2 = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+
+    osc1.type = 'sine';
+    const waves = ['sine', 'sine', 'sine', 'sine', 'triangle'];
+    osc2.type = waves[Math.floor(Math.random() * waves.length)];
+
+    osc1.frequency.setValueAtTime(root, t);
+    osc2.frequency.setValueAtTime(second, t);
+
+    osc1.detune.setValueAtTime((Math.random() - 0.5) * 4, t);
+    osc2.detune.setValueAtTime((Math.random() - 0.5) * 4, t);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1400 + Math.random() * 1000, t);
+    filter.Q.value = 0.3 + Math.random() * 0.3;
+
+    const dur = 0.35 + Math.random() * 0.15;
+    const peak = 0.04 + Math.random() * 0.02;
+
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(peak, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+    osc1.connect(filter);
+    osc2.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc1.start(t);
+    osc2.start(t);
+    osc1.stop(t + dur + 0.05);
+    osc2.stop(t + dur + 0.05);
+  },
+
+  playClick() {
+    if (!this.ctx || this.muted || !this.interfaceSounds) return;
+    const t = this.ctx.currentTime;
+    const base = 480 + Math.random() * 60;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(base, t);
+    osc.frequency.exponentialRampToValueAtTime(base * 0.9, t + 0.1);
+
+    filter.type = 'lowpass';
+    filter.frequency.value = 1200;
+
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.025, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(t);
+    osc.stop(t + 0.2);
+  },
+
+  startLayer(name) {
+    if (!this.ctx || this.layers[name]) return;
+    
+    if (name === 'metronome') {
+      this.activeLayers.add('metronome');
+      this.startMetronome();
+      return;
+    }
+
+    const t = this.ctx.currentTime;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.12, t + 1.2);
+    gain.connect(this.masterGain);
+
+    if (name === 'alpha' || name === 'theta') {
+      const base = name === 'alpha' ? 200 : 180;
+      const beat = name === 'alpha' ? 10 : 6;
+      const oscL = this.ctx.createOscillator();
+      const oscR = this.ctx.createOscillator();
+      const panL = this.ctx.createStereoPanner();
+      const panR = this.ctx.createStereoPanner();
+      oscL.frequency.value = base;
+      oscR.frequency.value = base + beat;
+      panL.pan.value = -0.8;
+      panR.pan.value = 0.8;
+      oscL.connect(panL); oscR.connect(panR);
+      panL.connect(gain); panR.connect(gain);
+      oscL.start(); oscR.start();
+      this.layers[name] = { gain, oscs: [oscL, oscR] };
+    } else if (name === 'drone') {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = 110;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 400;
+      osc.connect(filter);
+      filter.connect(gain);
+      osc.start();
+      this.layers[name] = { gain, oscs: [osc] };
+    } else if (name === 'arousal') {
+      const base = 140;
+      const beat = 5.5;
+      const oscL = this.ctx.createOscillator();
+      const oscR = this.ctx.createOscillator();
+      const panL = this.ctx.createStereoPanner();
+      const panR = this.ctx.createStereoPanner();
+      oscL.type = 'sine';
+      oscR.type = 'sine';
+      oscL.frequency.value = base;
+      oscR.frequency.value = base + beat;
+      panL.pan.value = -0.9;
+      panR.pan.value = 0.9;
+      const pulse = this.ctx.createOscillator();
+      pulse.type = 'sine';
+      pulse.frequency.value = 0.8;
+      const pulseGain = this.ctx.createGain();
+      pulseGain.gain.value = 8;
+      pulse.connect(pulseGain);
+      pulseGain.connect(oscL.frequency);
+      pulseGain.connect(oscR.frequency);
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 280;
+      oscL.connect(panL); oscR.connect(panR);
+      panL.connect(filter); panR.connect(filter);
+      filter.connect(gain);
+      oscL.start(); oscR.start(); pulse.start();
+      this.layers[name] = { gain, oscs: [oscL, oscR, pulse] };
+    } else if (name === 'rain') {
+      const bufferSize = this.ctx.sampleRate * 2;
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.3;
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+      noise.loop = true;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 1200;
+      filter.Q.value = 0.7;
+      noise.connect(filter);
+      filter.connect(gain);
+      noise.start();
+      this.layers[name] = { gain, oscs: [noise] };
+    }
+    this.activeLayers.add(name);
+  },
+
+  stopLayer(name) {
+    if (name === 'metronome') {
+      this.activeLayers.delete('metronome');
+      this.stopMetronome();
+      return;
+    }
+    const layer = this.layers[name];
+    if (!layer) return;
+    const t = this.ctx.currentTime;
+    layer.gain.gain.setTargetAtTime(0, t, 0.3);
+    setTimeout(() => {
+      layer.oscs.forEach(o => { try { o.stop(); } catch(e){} });
+    }, 800);
+    delete this.layers[name];
+    this.activeLayers.delete(name);
+  },
+
+  toggleLayer(name) {
+    this.init();
+    if (this.activeLayers.has(name)) this.stopLayer(name);
+    else this.startLayer(name);
+    return this.activeLayers.has(name);
+  },
+
+  startMetronome() {
+    this.stopMetronome();
+    if (this.metronomeInterval) clearInterval(this.metronomeInterval);
+    const interval = 60000 / this.metronomeBPM;
+    this.metronomeInterval = setInterval(() => this.playMetronomeTick(), interval);
+    this.playMetronomeTick();
+  },
+
+  stopMetronome() {
+    if (this.metronomeInterval) clearInterval(this.metronomeInterval);
+    this.metronomeInterval = null;
+  },
+
+  setBPM(bpm, isRemote = false) {
+    this.metronomeBPM = bpm;
+    if (this.activeLayers.has('metronome')) {
+      this.startMetronome();
+    }
+    if (!isRemote) {
+      NetworkEngine.send({ type: 'sync_bpm', bpm: bpm });
+    }
+  },
+
+  // ============================================================
+  // ОРГАНИЧЕСКИЙ ASMR-МЕТРОНОМ: СЕРДЦЕБИЕНИЕ + ДЫХАНИЕ + СУБ-БАС + ШУМ
+  // ============================================================
+  playMetronomeTick() {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+
+    const bpmEl = document.getElementById('bpmDisplay');
+    if (bpmEl) {
+      bpmEl.classList.add('pulse');
+      setTimeout(() => bpmEl.classList.remove('pulse'), 150);
+    }
+
+    const beatSec = 60 / this.metronomeBPM;
+    const dubDelay = Math.min(0.18, Math.max(0.10, beatSec * 0.28));
+
+    // 0. ОБЩАЯ ШИНА: сатурация для "аналоговой" теплоты
+    const mix = this.ctx.createGain();
+    mix.gain.value = 0.9;
+
+    const shaper = this.ctx.createWaveShaper();
+    const curve = new Float32Array(1024);
+    for (let i = 0; i < 1024; i++) {
+      const x = (i / 1023) * 2 - 1;
+      curve[i] = Math.tanh(x * 1.8);
+    }
+    shaper.curve = curve;
+    shaper.oversample = '2x';
+
+    mix.connect(shaper);
+    shaper.connect(this.masterGain);
+
+    // 1. СУБ-БАС "В ЖИВОТЕ": 40–45 Гц, с дыхательной модуляцией
+    const sub = this.ctx.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(44 + (Math.random() - 0.5) * 2, t);
+    sub.frequency.exponentialRampToValueAtTime(40, t + 0.32);
+
+    const breathLfo = this.ctx.createOscillator();
+    breathLfo.type = 'sine';
+    breathLfo.frequency.value = 0.18 + Math.random() * 0.05;
+    const breathDepth = this.ctx.createGain();
+    breathDepth.gain.value = 0.06;
+    breathLfo.connect(breathDepth);
+    breathDepth.connect(sub.frequency);
+
+    const subGain = this.ctx.createGain();
+    subGain.gain.setValueAtTime(0.0001, t);
+    subGain.gain.linearRampToValueAtTime(0.62, t + 0.018);
+    subGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.40);
+
+    sub.connect(subGain);
+    subGain.connect(mix);
+
+    // 2. СЕРДЕЧНЫЙ "LUB"
+    const lub = this.ctx.createOscillator();
+    lub.type = 'sine';
+    lub.frequency.setValueAtTime(72 + (Math.random() - 0.5) * 4, t);
+    lub.frequency.exponentialRampToValueAtTime(48, t + 0.12);
+
+    const drift = this.ctx.createOscillator();
+    drift.type = 'sine';
+    drift.frequency.value = 0.8 + Math.random() * 0.4;
+    const driftGain = this.ctx.createGain();
+    driftGain.gain.value = 1.5;
+    drift.connect(driftGain);
+    driftGain.connect(lub.frequency);
+
+    const lubFilter = this.ctx.createBiquadFilter();
+    lubFilter.type = 'lowpass';
+    lubFilter.frequency.setValueAtTime(380, t);
+    lubFilter.frequency.exponentialRampToValueAtTime(140, t + 0.18);
+    lubFilter.Q.value = 0.4;
+
+    const lubGain = this.ctx.createGain();
+    lubGain.gain.setValueAtTime(0.0001, t);
+    lubGain.gain.linearRampToValueAtTime(0.34, t + 0.012);
+    lubGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+
+    lub.connect(lubFilter);
+    lubFilter.connect(lubGain);
+    lubGain.connect(mix);
+
+    // 3. СЕРДЕЧНЫЙ "DUB"
+    const dubT = t + dubDelay;
+    const dub = this.ctx.createOscillator();
+    dub.type = 'sine';
+    dub.frequency.setValueAtTime(58 + (Math.random() - 0.5) * 3, dubT);
+    dub.frequency.exponentialRampToValueAtTime(42, dubT + 0.10);
+
+    const dubFilter = this.ctx.createBiquadFilter();
+    dubFilter.type = 'lowpass';
+    dubFilter.frequency.setValueAtTime(220, dubT);
+    dubFilter.frequency.exponentialRampToValueAtTime(110, dubT + 0.12);
+
+    const dubGain = this.ctx.createGain();
+    dubGain.gain.setValueAtTime(0.0001, dubT);
+    dubGain.gain.linearRampToValueAtTime(0.18, dubT + 0.014);
+    dubGain.gain.exponentialRampToValueAtTime(0.0001, dubT + 0.20);
+
+    dub.connect(dubFilter);
+    dubFilter.connect(dubGain);
+    dubGain.connect(mix);
+
+    // 4. ВЛАЖНОЕ ДЫХАНИЕ / ASMR-ТЕКСТУРА
+    const breathLen = 0.12;
+    const breathBuf = this.ctx.createBuffer(
+      1, Math.floor(this.ctx.sampleRate * breathLen), this.ctx.sampleRate
+    );
+    const bd = breathBuf.getChannelData(0);
+    for (let i = 0; i < bd.length; i++) {
+      bd[i] = (Math.random() * 2 - 1) * 0.6
+            + (Math.random() * 2 - 1) * 0.3
+            + (Math.random() * 2 - 1) * 0.1;
+    }
+
+    const breath = this.ctx.createBufferSource();
+    breath.buffer = breathBuf;
+
+    const breathFilter = this.ctx.createBiquadFilter();
+    breathFilter.type = 'bandpass';
+    breathFilter.frequency.setValueAtTime(1100, t);
+    breathFilter.frequency.exponentialRampToValueAtTime(480, t + 0.11);
+    breathFilter.Q.value = 0.8;
+
+    const breathGain = this.ctx.createGain();
+    breathGain.gain.setValueAtTime(0.0001, t);
+    breathGain.gain.linearRampToValueAtTime(0.055, t + 0.008);
+    breathGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+
+    breath.connect(breathFilter);
+    breathFilter.connect(breathGain);
+    breathGain.connect(mix);
+
+    // 5. НОВЫЙ СЛОЙ: НИЗКОЧАСТОТНЫЙ ШУМ (60–80 Гц) ДЛЯ "ЖИВОГО" БАСА
+    const subNoise = this.ctx.createBufferSource();
+    subNoise.buffer = breathBuf; // Переиспользуем буфер дыхания
+
+    const subNoiseFilter = this.ctx.createBiquadFilter();
+    subNoiseFilter.type = 'lowpass';
+    subNoiseFilter.frequency.setValueAtTime(80, t); // Отсекаем всё выше 80 Гц
+    subNoiseFilter.Q.value = 0.5;
+
+    const subNoiseGain = this.ctx.createGain();
+    subNoiseGain.gain.setValueAtTime(0.0001, t);
+    subNoiseGain.gain.linearRampToValueAtTime(0.02, t + 0.01); // Очень тихо
+    subNoiseGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.35); // Длинный, "дышащий" хвост
+
+    subNoise.connect(subNoiseFilter);
+    subNoiseFilter.connect(subNoiseGain);
+    subNoiseGain.connect(mix);
+
+    // 6. БИНАУРАЛЬНЫЙ РИТМ 9 Гц
+    const binL = this.ctx.createOscillator();
+    const binR = this.ctx.createOscillator();
+    binL.type = 'sine';
+    binR.type = 'sine';
+    binL.frequency.value = 210.42;
+    binR.frequency.value = 210.42 + 9;
+
+    const binPanL = this.ctx.createStereoPanner();
+    const binPanR = this.ctx.createStereoPanner();
+    binPanL.pan.value = -0.7;
+    binPanR.pan.value = 0.7;
+
+    const binGain = this.ctx.createGain();
+    binGain.gain.setValueAtTime(0.0001, t);
+    binGain.gain.linearRampToValueAtTime(0.018, t + 0.05);
+    binGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+
+    binL.connect(binPanL);
+    binR.connect(binPanR);
+    binPanL.connect(binGain);
+    binPanR.connect(binGain);
+    binGain.connect(this.masterGain);
+
+    // СТАРТ / СТОП
+    breathLfo.start(t);   breathLfo.stop(t + 0.42);
+    sub.start(t);         sub.stop(t + 0.42);
+    drift.start(t);       drift.stop(t + 0.26);
+    lub.start(t);         lub.stop(t + 0.26);
+    dub.start(dubT);      dub.stop(dubT + 0.22);
+    breath.start(t);      breath.stop(t + 0.14);
+    subNoise.start(t);    subNoise.stop(t + 0.36);
+    binL.start(t);        binL.stop(t + 0.46);
+    binR.start(t);        binR.stop(t + 0.46);
+  }
+};
+
+const NetworkEngine = {
+  peer: null,
+  conn: null,
+  myId: null,
+  friendId: null,
+  heartbeatInterval: null,
+
+  init() {
+    const randomId = 'kolba-' + Math.random().toString(36).substring(2, 8);
+    this.peer = new Peer(randomId);
+    
+    this.peer.on('open', (id) => {
+      this.myId = id;
+      this.updateUI();
+      
+      const hash = window.location.hash.replace('#', '');
+      if (hash && hash !== id && hash.startsWith('kolba-')) {
+        this.connect(hash);
+      }
+    });
+
+    this.peer.on('connection', (conn) => {
+      if (this.conn) { conn.close(); return; }
+      this.conn = conn;
+      this.friendId = conn.peer;
+      this.setupConnection();
+      this.updateUI();
+      this.syncState();
+      this.startHeartbeat();
+    });
+
+    this.peer.on('error', (err) => {
+      console.error('PeerJS error:', err);
+      if (err.type === 'peer-unavailable') alert('Друг не найден. Проверьте ссылку.');
+    });
+  },
+
+  connect(friendId) {
+    if (!friendId || this.conn) return;
+    this.conn = this.peer.connect(friendId, { reliable: true });
+    
+    this.conn.on('open', () => {
+      this.friendId = friendId;
+      this.setupConnection();
+      this.updateUI();
+      this.startHeartbeat();
+    });
+    
+    this.conn.on('error', (err) => {
+      console.error(err);
+      alert('Не удалось подключиться. Возможно, ссылка устарела.');
+      this.conn = null;
+      this.updateUI();
+    });
+  },
+
+  setupConnection() {
+    if (!this.conn) return;
+    this.conn.on('data', (data) => {
+      this.updateSyncTime();
+      this.handleData(data);
+    });
+    this.conn.on('close', () => {
+      this.conn = null;
+      this.friendId = null;
+      this.stopHeartbeat();
+      this.updateUI();
+    });
+  },
+
+  send(data) {
+    if (this.conn && this.conn.open) {
+      this.conn.send(data);
+    }
+  },
+
+  startHeartbeat() {
+    this.stopHeartbeat();
+    this.heartbeatInterval = setInterval(() => {
+      if (this.conn && this.conn.open) {
+        this.send({ type: 'ping' });
+      }
+    }, 4000);
+  },
+
+  stopHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  },
+
+  handleData(data) {
+    if (data.type === 'ping') {
+      this.send({ type: 'pong' });
+    }
+    else if (data.type === 'pong') {
+    }
+    else if (data.type === 'sync_state') {
+      current = data.current;
+      undoStack = data.undoStack;
+      
+      Object.keys(SoundEngine.layers).forEach(k => SoundEngine.stopLayer(k));
+      document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
+      
+      if (data.activeLayers) {
+        data.activeLayers.forEach(l => {
+          if (!SoundEngine.activeLayers.has(l)) {
+            SoundEngine.startLayer(l);
+            const btn = document.querySelector(`.layer-btn[data-layer="${l}"]`);
+            if (btn) btn.classList.add('active');
+            if (l === 'metronome') document.getElementById('bpmSlider').disabled = false;
+          }
+        });
+      }
+      if (data.bpm) {
+        SoundEngine.setBPM(data.bpm, true);
+        document.getElementById('bpmSlider').value = data.bpm;
+        document.getElementById('bpmDisplay').textContent = data.bpm + ' BPM';
+      }
+      
+      if (data.volume !== undefined) {
+        SoundEngine.setVolume(data.volume, true);
+        document.getElementById('volumeSlider').value = data.volume * 100;
+      }
+      if (data.muted !== undefined && data.muted !== SoundEngine.muted) {
+        SoundEngine.toggleMute(true);
+        document.getElementById('muteBtn').textContent = SoundEngine.muted ? '🔇' : '🔊';
+      }
+
+      updateSurfaceTarget();
+      initSurface();
+      save();
+      updateStats();
+      updateUI();
+    } 
+    else if (data.type === 'add_emotion') {
+      addEmotion(data.id, data.ml, true, data.isPour);
+      if (!data.isPour) SoundEngine.playPress();
+    }
+    else if (data.type === 'toggle_layer') {
+      if (data.active) SoundEngine.startLayer(data.layer);
+      else SoundEngine.stopLayer(data.layer);
+      
+      const btn = document.querySelector(`.layer-btn[data-layer="${data.layer}"]`);
+      if (btn) btn.classList.toggle('active', data.active);
+      
+      if (data.layer === 'metronome') {
+        document.getElementById('bpmSlider').disabled = !data.active;
+      }
+    }
+    else if (data.type === 'sync_bpm') {
+      SoundEngine.setBPM(data.bpm, true);
+      document.getElementById('bpmSlider').value = data.bpm;
+      document.getElementById('bpmDisplay').textContent = data.bpm + ' BPM';
+    }
+    else if (data.type === 'sync_volume') {
+      SoundEngine.setVolume(data.volume, true);
+      document.getElementById('volumeSlider').value = data.volume * 100;
+    }
+    else if (data.type === 'sync_mute') {
+      if (data.muted !== SoundEngine.muted) {
+        SoundEngine.toggleMute(true);
+        document.getElementById('muteBtn').textContent = SoundEngine.muted ? '🔇' : '🔊';
+      }
+    }
+    else if (data.type === 'reset_flask') {
+      if (getTotal() > 0) {
+        const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+        history.push({ date: stamp, volumes: { ...current } });
+        localStorage.setItem('kolbaHistory', JSON.stringify(history));
+      }
+      current = {}; undoStack = []; particles = []; bubbles = [];
+      initSurface(); save(); updateStats(); updateUI();
+    }
+  },
+
+  syncState() {
+    this.send({
+      type: 'sync_state',
+      current: current,
+      undoStack: undoStack,
+      activeLayers: Array.from(SoundEngine.activeLayers),
+      bpm: SoundEngine.metronomeBPM,
+      volume: SoundEngine.volume,
+      muted: SoundEngine.muted
+    });
+  },
+
+  updateSyncTime() {
+    const timeBox = document.getElementById('syncTimeBox');
+    const timeText = document.getElementById('syncTimeText');
+    if (timeBox && timeText) {
+      timeBox.style.display = 'block';
+      timeText.textContent = new Date().toLocaleTimeString('ru-RU');
+    }
+  },
+
+  updateUI() {
+    const dot = document.getElementById('syncStatusDot');
+    const text = document.getElementById('syncInfoText');
+    const myIdEl = document.getElementById('syncMyId');
+    const timeBox = document.getElementById('syncTimeBox');
+    
+    const myAvatar = document.getElementById('myAvatar');
+    const friendAvatar = document.getElementById('friendAvatar');
+    
+    const copyBtn = document.getElementById('copyLinkBtn');
+    const disconnectBtn = document.getElementById('syncDisconnectBtn');
+
+    if (!dot) return;
+
+    if (this.myId) {
+      const initial = this.myId.split('-')[1].charAt(0).toUpperCase();
+      myAvatar.textContent = initial;
+      myIdEl.textContent = this.myId;
+    } else {
+      myAvatar.textContent = '∞';
+      myIdEl.textContent = 'Генерация...';
+    }
+
+    if (this.conn && this.conn.open) {
+      dot.className = 'sync-dot green';
+      text.textContent = 'В комнате';
+      copyBtn.style.display = 'none';
+      disconnectBtn.style.display = 'block';
+      
+      if (this.friendId) {
+        const friendInitial = this.friendId.split('-')[1].charAt(0).toUpperCase();
+        friendAvatar.textContent = friendInitial;
+        friendAvatar.classList.add('active');
+      }
+    } else {
+      dot.className = 'sync-dot grey';
+      text.textContent = 'Ожидание...';
+      copyBtn.style.display = 'block';
+      disconnectBtn.style.display = 'none';
+      timeBox.style.display = 'none';
+      
+      friendAvatar.textContent = '∞';
+      friendAvatar.classList.remove('active');
+    }
+  }
+};
+
+const DEFAULT_EMOTIONS = [
+  { id: 'joy', name: 'Радость', color: '#FFD700', quote: 'Счастье — это гармония между тем, что ты думаешь, говоришь и делаешь.', insight: 'Сегодня вы излучаете позитив. Поделитесь этой энергией с окружающими — улыбка заразительна!' },
+  { id: 'trust', name: 'Доверие', color: '#2ECC71', quote: 'Доверие — это смелость быть уязвимым.', insight: 'Отличный день для того, чтобы открыться близким. Искренность укрепит ваши связи.' },
+  { id: 'fear', name: 'Страх', color: '#8E44AD', quote: 'Страх — это просто мысль. А мысли можно менять.', insight: 'Если сегодня было страшно, сделайте шаг назад. Выдохните. Вы в безопасности прямо сейчас.' },
+  { id: 'surprise', name: 'Удивление', color: '#00D2FF', quote: 'Удивление — это начало понимания.', insight: 'Жизнь подкинула что-то новое? Не спешите оценивать. Позвольте себе просто наблюдать и учиться.' },
+  { id: 'sadness', name: 'Печаль', color: '#2980B9', quote: 'Печаль — это любовь с никуда идти.', insight: 'Грусть — это нормально. Позвольте себе прожить её. Иногда нужно просто выспаться и выпить чаю.' },
+  { id: 'disgust', name: 'Отвращение', color: '#A2B32C', quote: 'Отвращение защищает нас от того, что нам вредит.', insight: 'Ваши границы сегодня важны. Не бойтесь сказать «нет» тому, что вызывает внутренний дискомфорт.' },
+  { id: 'anger', name: 'Гнев', color: '#E74C3C', quote: 'Гнев — это энергия. Направь её туда, где она нужна.', insight: 'Сильные эмоции дают много энергии. Попробуйте направить этот огонь в спортзал или уборку.' },
+  { id: 'anticipation', name: 'Ожидание', color: '#F39C12', quote: 'Ожидание делает момент ярче.', insight: 'Предвкушение — прекрасное чувство. Запланируйте что-то приятное на завтра, чтобы продлить его.' },
+  { id: 'calm', name: 'Спокойствие', color: '#1ABC9C', quote: 'Спокойствие — это мир внутри шторма.', insight: 'Внутренний баланс — это суперсила. Уделите сегодня 10 минут тишине и медитации.' },
+  { id: 'embarrassment', name: 'Смущение', color: '#FF7F9C', quote: 'Смущение — знак того, что тебе не всё равно.', insight: 'Все мы иногда попадаем в неловкие ситуации. Отнеситесь к себе с юмором — это делает нас живыми.' },
+  { id: 'discomfort', name: 'Дискомфорт', color: '#D35400', quote: 'Дискомфорт — это рост, который ещё не стал привычкой.', insight: 'Выход из зоны комфорта — это всегда напряжение. Но именно там происходит ваш рост.' },
+  { id: 'fatigue', name: 'Усталость', color: '#95A5A6', quote: 'Усталость — это тело, которое просит заботы.', insight: 'Сегодня вашему организму нужен отдых. Отложите дела, если можете. Сон — лучшее лекарство.' }
+];
+
+let EMOTIONS = [];
+let current = {};
+let history = [];
+let undoStack = [];
+let particles = []; 
+let bubbles = []; 
+let mouse = { x: -999, y: -999, down: false, px: -999, py: -999 };
+let pouring = null;
+let pourInterval = null;
+
+const canvas = document.getElementById('flaskCanvas');
+const ctx = canvas.getContext('2d');
+let W, H;
+const NECK_Y = 60;
+const BODY_TOP = 130;
+const BASE_Y_OFFSET = 40; 
+let flaskPath; 
+let flaskWidth;
+const SURFACE_POINTS = 40; 
+let surface = []; 
+
+function loadEmotions() {
+  const saved = JSON.parse(localStorage.getItem('kolbaEmotions') || 'null');
+  if (saved && Array.isArray(saved)) {
+    EMOTIONS = saved;
+  } else {
+    EMOTIONS = [...DEFAULT_EMOTIONS];
+  }
+}
+function saveEmotions() {
+  localStorage.setItem('kolbaEmotions', JSON.stringify(EMOTIONS));
+  renderButtons();
+  updateStats();
+  updateUI();
+}
+function deleteEmotion(id) {
+  SoundEngine.playClick();
+  if(confirm('Удалить эту эмоцию? (Если она есть в колбе, она также исчезнет из статистики)')) {
+    EMOTIONS = EMOTIONS.filter(e => e.id !== id);
+    if (current[id]) {
+      delete current[id];
+      updateSurfaceTarget();
+      initSurface();
+    }
+    saveEmotions();
+    renderEditor();
+    save();
+    updateStats();
+    updateUI();
+  }
+}
+
+function initSurface() {
+  surface = [];
+  const targetY = getSurfaceTargetY();
+  for (let i = 0; i < SURFACE_POINTS; i++) {
+    surface.push({ y: targetY, targetY: targetY, vy: 0, tension: 0.015, damping: 0.04, spread: 0.1 });
+  }
+}
+
+function resize() {
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * devicePixelRatio;
+  canvas.height = rect.height * devicePixelRatio;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  W = rect.width; H = rect.height;
+  flaskWidth = Math.min(W * 0.52, 210);
+  buildFlaskPath();
+  initSurface();
+}
+window.addEventListener('resize', resize);
+
+function buildFlaskPath() {
+  const cx = W / 2;
+  const baseY = H - BASE_Y_OFFSET;
+  flaskPath = new Path2D();
+  flaskPath.moveTo(cx - flaskWidth * 0.16, NECK_Y);
+  flaskPath.bezierCurveTo(cx - flaskWidth * 0.42, BODY_TOP, cx - flaskWidth * 0.58, baseY - 70, cx - flaskWidth * 0.44, baseY);
+  flaskPath.lineTo(cx + flaskWidth * 0.44, baseY);
+  flaskPath.bezierCurveTo(cx + flaskWidth * 0.58, baseY - 70, cx + flaskWidth * 0.42, BODY_TOP, cx + flaskWidth * 0.16, NECK_Y);
+  flaskPath.closePath();
+}
+
+function getTotal() { return Object.values(current).reduce((a, b) => a + b, 0); }
+
+function getSurfaceTargetY() {
+  const total = getTotal();
+  if (total === 0) return H - BASE_Y_OFFSET;
+  const ratio = Math.min(1, total / MAX_ML); 
+  const baseY = H - BASE_Y_OFFSET;
+  const maxHeight = baseY - BODY_TOP - 10; 
+  return baseY - (maxHeight * ratio);
+}
+
+function getTopColors(count = 3) {
+  const sorted = Object.entries(current).sort((a, b) => b[1] - a[1]);
+  const colors = [];
+  for (let i = 0; i < Math.min(count, sorted.length); i++) {
+    const emo = EMOTIONS.find(e => e.id === sorted[i][0]);
+    if (emo) colors.push(emo.color);
+  }
+  while (colors.length < count && colors.length > 0) {
+    colors.push(colors[colors.length - 1]);
+  }
+  return colors;
+}
+
+function updateSurfaceTarget() {
+  const targetY = getSurfaceTargetY();
+  surface.forEach(p => { p.targetY = targetY; });
+}
+
+function addEmotion(id, ml, isRemote = false, isPour = false) {
+  const add = Math.max(1, ml);
+  undoStack.push(JSON.parse(JSON.stringify(current)));
+  if (undoStack.length > 25) undoStack.shift();
+  current[id] = (current[id] || 0) + add;
+  spawnSplash(id, add);
+  updateSurfaceTarget();
+  save();
+  updateStats();
+  updateUI();
+
+  if (!isRemote) {
+    NetworkEngine.send({ type: 'add_emotion', id, ml, isPour });
+  }
+}
+
+function spawnSplash(id, ml) {
+  const emo = EMOTIONS.find(e => e.id === id);
+  if (!emo) return;
+  const count = Math.min(15, Math.max(3, Math.floor(ml * 1.5))); 
+  const cx = W / 2;
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: cx + (Math.random() - 0.5) * 10,
+      y: NECK_Y + 10 + Math.random() * 10,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: 1.5 + Math.random() * 2,
+      r: 1.5 + Math.random() * 2,
+      color: emo.color, id
+    });
+  }
+}
+
+function simulate() {
+  const baseY = H - BASE_Y_OFFSET;
+  const total = getTotal();
+  const isOverflow = total > MAX_ML;
+  
+  if (isOverflow && Math.random() < 0.05) {
+    const idx = Math.floor(Math.random() * SURFACE_POINTS);
+    surface[idx].vy += (Math.random() - 0.5) * 3;
+  }
+
+  for (let i = 0; i < surface.length; i++) {
+    let left = surface[i === 0 ? 0 : i - 1];
+    let right = surface[i === surface.length - 1 ? i : i + 1];
+    surface[i].vy += (left.y - surface[i].y) * surface[i].spread;
+    surface[i].vy += (right.y - surface[i].y) * surface[i].spread;
+  }
+  
+  for (let i = 0; i < surface.length; i++) {
+    let p = surface[i];
+    let force = (p.targetY - p.y) * p.tension;
+    p.vy += force;
+    p.vy *= (1 - p.damping);
+    p.y += p.vy;
+  }
+
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.vy += 0.25; p.x += p.vx; p.y += p.vy;
+    const cx = W / 2;
+    const t = (p.x - (cx - flaskWidth * 0.5)) / flaskWidth;
+    let surfIdx = Math.floor(Math.max(0, Math.min(1, t)) * (SURFACE_POINTS - 1));
+    const currentSurfY = surface[surfIdx].y;
+    if (p.y >= currentSurfY) {
+      surface[surfIdx].vy += p.vy * 0.5;
+      if (surfIdx > 0) surface[surfIdx-1].vy += p.vy * 0.2;
+      if (surfIdx < SURFACE_POINTS-1) surface[surfIdx+1].vy += p.vy * 0.2;
+      if (Math.random() < 0.3) {
+        bubbles.push({ x: p.x, y: currentSurfY + 10, vy: -0.5 - Math.random(), r: 1 + Math.random() * 2, color: p.color });
+      }
+      particles.splice(i, 1); continue;
+    }
+    if (p.y > baseY) particles.splice(i, 1);
+  }
+
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const b = bubbles[i];
+    b.y += b.vy; b.x += Math.sin(b.y * 0.05) * 0.5; 
+    const t = (b.x - (W/2 - flaskWidth * 0.5)) / flaskWidth;
+    let surfIdx = Math.floor(Math.max(0, Math.min(1, t)) * (SURFACE_POINTS - 1));
+    if (b.y < surface[surfIdx].y + 5) {
+      surface[surfIdx].vy -= 0.5; 
+      bubbles.splice(i, 1);
+    }
+  }
+  if (bubbles.length > 50) bubbles.splice(0, bubbles.length - 50);
+
+  if (mouse.down && mouse.y > 0 && mouse.y < baseY) {
+    for (let i = 0; i < surface.length; i++) {
+      const ptX = (W/2 - flaskWidth*0.5) + (i / (SURFACE_POINTS - 1)) * flaskWidth;
+      const dx = ptX - mouse.x; const dy = surface[i].y - mouse.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 70 && dy > -10) { 
+        surface[i].vy += (mouse.vy || 0) * 0.5 + (Math.random() - 0.5) * 0.5;
+      }
+    }
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  const cx = W / 2;
+  const baseY = H - BASE_Y_OFFSET;
+  const total = getTotal();
+  
+  ctx.fillStyle = 'rgba(255,255,255,0.01)';
+  ctx.fill(flaskPath);
+
+  if (total > 0) {
+    ctx.save();
+    ctx.clip(flaskPath); 
+    const leftWall = cx - flaskWidth;
+    const rightWall = cx + flaskWidth;
+    const topColors = getTopColors(3);
+    const grad = ctx.createLinearGradient(0, surface[0].targetY, 0, baseY);
+    
+    if (topColors.length === 1) {
+      grad.addColorStop(0, topColors[0] + 'aa'); grad.addColorStop(1, topColors[0] + 'ff'); 
+    } else if (topColors.length === 2) {
+      grad.addColorStop(0, topColors[0] + 'cc'); grad.addColorStop(1, topColors[1] + 'ff');
+    } else {
+      grad.addColorStop(0, topColors[0] + 'aa'); grad.addColorStop(0.5, topColors[1] + 'dd'); grad.addColorStop(1, topColors[2] + 'ff');
+    }
+
+    ctx.shadowBlur = 25; ctx.shadowColor = topColors[0];
+    ctx.beginPath();
+    ctx.moveTo(leftWall, surface[0].y);
+    ctx.lineTo(leftWall, baseY); ctx.lineTo(rightWall, baseY);
+    ctx.lineTo(rightWall, surface[surface.length-1].y);
+    for (let i = surface.length - 1; i > 0; i--) {
+      const x1 = (W/2 - flaskWidth*0.5) + (i / (SURFACE_POINTS - 1)) * flaskWidth;
+      const x0 = (W/2 - flaskWidth*0.5) + ((i-1) / (SURFACE_POINTS - 1)) * flaskWidth;
+      ctx.quadraticCurveTo(x1, surface[i].y, (x1+x0)/2, (surface[i].y+surface[i-1].y)/2);
+    }
+    ctx.closePath();
+    ctx.fillStyle = grad; ctx.fill();
+    ctx.shadowBlur = 0; 
+
+    bubbles.forEach(b => {
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fillStyle = b.color; ctx.globalAlpha = 0.6; ctx.fill(); ctx.globalAlpha = 1;
+    });
+
+    ctx.beginPath();
+    for (let i = 0; i < surface.length; i++) {
+      const x = (W/2 - flaskWidth*0.5) + (i / (SURFACE_POINTS - 1)) * flaskWidth;
+      if (i === 0) ctx.moveTo(x, surface[i].y);
+      else {
+        const prevX = (W/2 - flaskWidth*0.5) + ((i-1) / (SURFACE_POINTS - 1)) * flaskWidth;
+        ctx.quadraticCurveTo(prevX, surface[i-1].y, (x+prevX)/2, (surface[i].y+surface[i-1].y)/2);
+      }
+    }
+    ctx.strokeStyle = topColors[0]; ctx.lineWidth = 3;
+    ctx.shadowBlur = 15; ctx.shadowColor = topColors[0];
+    ctx.stroke(); ctx.shadowBlur = 0;
+    ctx.restore(); 
+  }
+
+  particles.forEach(p => {
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, p.r, p.r * 1.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = p.color; ctx.fill();
+    ctx.shadowBlur = 10; ctx.shadowColor = p.color;
+  });
+  ctx.shadowBlur = 0;
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 3; ctx.stroke(flaskPath);
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1; ctx.stroke(flaskPath);
+
+  ctx.beginPath();
+  ctx.ellipse(cx - flaskWidth * 0.28, H * 0.4, 10, 60, -0.15, 0, Math.PI * 2);
+  const glassGlow = ctx.createLinearGradient(cx - flaskWidth * 0.3, H * 0.3, cx - flaskWidth * 0.2, H * 0.5);
+  glassGlow.addColorStop(0, 'rgba(255,255,255,0.08)'); glassGlow.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = glassGlow; ctx.fill();
+
+  ctx.beginPath();
+  ctx.ellipse(cx, NECK_Y, flaskWidth * 0.16, 7, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function loop() {
+  if (mouse.down) {
+    mouse.vy = mouse.y - (mouse.py || mouse.y); mouse.py = mouse.y;
+  } else { mouse.vy = 0; mouse.py = mouse.y; }
+  simulate(); draw(); requestAnimationFrame(loop);
+}
+
+canvas.addEventListener('pointermove', e => {
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = e.clientX - rect.left; mouse.y = e.clientY - rect.top;
+});
+canvas.addEventListener('pointerleave', () => { mouse.x = -999; mouse.y = -999; mouse.down = false; });
+canvas.addEventListener('pointerdown', () => { mouse.down = true; SoundEngine.init(); });
+canvas.addEventListener('pointerup', () => { mouse.down = false; });
+
+function renderButtons() {
+  const btns = document.getElementById('emotionButtons');
+  btns.innerHTML = '';
+  const sorted = Object.entries(current).sort((a, b) => b[1] - a[1]);
+  const dominantId = sorted.length > 0 ? sorted[0][0] : null;
+  EMOTIONS.forEach(emo => {
+    const btn = document.createElement('button');
+    btn.className = 'emotion-btn';
+    btn.style.borderColor = emo.color;
+    btn.style.color = emo.color;
+    btn.textContent = emo.name;
+    if (emo.id === dominantId) btn.classList.add('dominant');
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); 
+      SoundEngine.init();
+      SoundEngine.playPress();
+      addEmotion(emo.id, DROP_ML, false, false);
+      pouring = emo.id;
+      clearInterval(pourInterval);
+      pourInterval = setInterval(() => { 
+        if (pouring) addEmotion(emo.id, POUR_RATE / 6, false, true); 
+      }, 100);
+    });
+    const stop = () => { 
+      clearInterval(pourInterval);
+      pouring = null; 
+    };
+    btn.addEventListener('pointerup', stop);
+    btn.addEventListener('pointerleave', stop);
+    btn.addEventListener('pointercancel', stop);
+    btns.appendChild(btn);
+  });
+}
+
+function renderEditor() {
+  const list = document.getElementById('editorList');
+  list.innerHTML = '';
+  EMOTIONS.forEach(emo => {
+    const div = document.createElement('div');
+    div.className = 'editor-item';
+    div.innerHTML = `
+      <div class="editor-item-name">
+        <span class="color-dot" style="background:${emo.color}; box-shadow: 0 0 8px ${emo.color}"></span>
+        ${emo.name}
+      </div>
+      <button class="del-btn" title="Удалить" onclick="deleteEmotion('${emo.id}')">✕</button>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function save() {
+  const today = new Date().toISOString().slice(0, 10);
+  localStorage.setItem('kolba', JSON.stringify({ date: today, volumes: current, undo: undoStack }));
+}
+
+function loadState() {
+  loadEmotions();
+  const today = new Date().toISOString().slice(0, 10);
+  const saved = JSON.parse(localStorage.getItem('kolba') || '{}');
+  if (saved.date === today) {
+    current = saved.volumes || {}; undoStack = saved.undo || [];
+  } else if (saved.date && Object.keys(saved.volumes || {}).length) {
+    history.push({ date: saved.date, volumes: saved.volumes });
+  }
+  history = JSON.parse(localStorage.getItem('kolbaHistory') || '[]');
+  save(); 
+  renderButtons(); 
+  updateSurfaceTarget(); 
+  initSurface(); 
+  updateUI();
+  updateStats();
+}
+
+function updateStats() {
+  const total = getTotal();
+  
+  const pct = Math.min(100, (total / MAX_ML) * 100).toFixed(0);
+  const pctEl = document.getElementById('flaskPct');
+  const volEl = document.getElementById('flaskVolText');
+  const fillTextEl = document.getElementById('flaskFillText');
+  
+  if (pctEl && volEl && fillTextEl) {
+    pctEl.textContent = pct;
+    volEl.textContent = total.toFixed(0) + ' мл';
+    
+    const sorted = Object.entries(current).sort((a, b) => b[1] - a[1]);
+    if (sorted.length > 0) {
+      const domEmo = EMOTIONS.find(e => e.id === sorted[0][0]);
+      if (domEmo) {
+        pctEl.style.textShadow = `0 0 35px ${domEmo.color}, 0 0 10px ${domEmo.color}`;
+        fillTextEl.style.opacity = '1';
+      }
+    } else {
+      pctEl.style.textShadow = '0 0 25px var(--accent)';
+      fillTextEl.style.opacity = '0.6';
+    }
+  }
+
+  const el = document.getElementById('statsContent');
+  if (total === 0) { 
+    el.innerHTML = '<div style="color:var(--muted); font-size:0.9rem;">Колба пуста. Добавь эмоции.</div>'; 
+    return; 
+  }
+  
+  const sorted = Object.entries(current).sort((a, b) => b[1] - a[1]);
+  let html = `<div class="stat-row" style="font-size:1rem; margin-bottom:12px;"><span>Всего</span><span style="color:var(--accent); font-weight:700;">${total.toFixed(0)} мл</span></div>`;
+  
+  if (total > MAX_ML) {
+    html += `<div style="color:var(--accent); font-size:0.75rem; margin-bottom:12px; background:rgba(94,234,212,0.1); padding:6px 10px; border-radius:6px;">✨ Колба переполнена!</div>`;
+  }
+
+  const displayList = (sorted.length > 3 && !statsExpanded) ? sorted.slice(0, 3) : sorted;
+
+  displayList.forEach(([id, ml]) => {
+    const emo = EMOTIONS.find(e => e.id === id);
+    if (!emo) return;
+    const pct = (ml / total * 100).toFixed(1);
+    html += `<div class="stat-row"><span><span class="color-dot" style="background:${emo.color}; box-shadow: 0 0 8px ${emo.color}"></span>${emo.name}</span><span>${ml.toFixed(0)} мл</span></div>
+    <div class="bar"><div class="bar-fill" style="width:${pct}%; background:${emo.color}; box-shadow: 0 0 10px ${emo.color}"></div></div>`;
+  });
+
+  if (sorted.length > 3) {
+    const btnText = statsExpanded ? 'Скрыть' : `Показать все (${sorted.length})`;
+    html += `<button id="toggleStatsBtn" class="toggle-stats-btn">${btnText}</button>`;
+  }
+
+  el.innerHTML = html;
+
+  const toggleBtn = document.getElementById('toggleStatsBtn');
+  if (toggleBtn) {
+    toggleBtn.onclick = () => {
+      SoundEngine.playClick();
+      statsExpanded = !statsExpanded;
+      updateStats();
+    };
+  }
+
+  renderButtons(); 
+}
+
+function updateUI() {
+  const total = getTotal();
+  const quoteCard = document.getElementById('quoteCard');
+  const quoteText = document.getElementById('quoteText');
+  const quoteAuthor = document.getElementById('quoteAuthor');
+  const insightText = document.getElementById('insightText');
+  if (total === 0) {
+    quoteCard.style.display = 'none';
+    insightText.innerHTML = 'Добавляйте эмоции, чтобы наполнить колбу. Здесь появится персональный совет на основе вашего дня.';
+    return;
+  }
+  const sorted = Object.entries(current).sort((a, b) => b[1] - a[1]);
+  const domId = sorted[0][0];
+  const domEmo = EMOTIONS.find(e => e.id === domId);
+  if (domEmo) {
+    quoteCard.style.display = 'block';
+    quoteCard.style.borderLeftColor = domEmo.color;
+    quoteText.textContent = `«${domEmo.quote}»`;
+    quoteAuthor.textContent = `— ${domEmo.name}`;
+    insightText.innerHTML = `<span class="insight-highlight" style="color:${domEmo.color}">${domEmo.name} преобладает.</span> ${domEmo.insight}`;
+  }
+}
+
+resize(); loadState(); loop();
+NetworkEngine.init();
+
+document.getElementById('undoBtn').onclick = () => {
+  SoundEngine.init(); SoundEngine.playClick();
+  if (!undoStack.length) return;
+  current = undoStack.pop(); particles = []; bubbles = [];
+  updateSurfaceTarget(); initSurface(); save(); updateStats(); updateUI();
+  NetworkEngine.send({ type: 'sync_state', current, undoStack, activeLayers: Array.from(SoundEngine.activeLayers), bpm: SoundEngine.metronomeBPM, volume: SoundEngine.volume, muted: SoundEngine.muted });
+};
+
+document.getElementById('newFlaskBtn').onclick = () => {
+  SoundEngine.init(); SoundEngine.playClick();
+  if (confirm('Сохранить текущую колбу в историю и начать новую? (Синхронизируется с другом)')) {
+    if (getTotal() > 0) {
+      const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+      history.push({ date: stamp, volumes: { ...current } });
+      localStorage.setItem('kolbaHistory', JSON.stringify(history));
+    }
+    current = {}; undoStack = []; particles = []; bubbles = [];
+    statsExpanded = false;
+    initSurface(); save(); updateStats(); updateUI();
+    NetworkEngine.send({ type: 'reset_flask' });
+  }
+};
+
+document.getElementById('themeBtn').onclick = () => {
+  SoundEngine.init(); SoundEngine.playClick();
+  const isLight = document.documentElement.dataset.theme === 'light';
+  document.documentElement.dataset.theme = isLight ? '' : 'light';
+  document.getElementById('themeBtn').textContent = isLight ? 'Тёмная' : 'Светлая';
+};
+
+function updateTime() {
+  document.getElementById('datetime').textContent = new Date().toLocaleString('ru-RU', {
+    day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'
+  });
+}
+setInterval(updateTime, 15000); updateTime();
+
+document.getElementById('editorBtn').onclick = () => { 
+  SoundEngine.init(); SoundEngine.playClick();
+  renderEditor();
+  document.getElementById('editorModal').classList.add('show'); 
+};
+
+document.getElementById('saveCustom').onclick = () => {
+  SoundEngine.init(); SoundEngine.playClick();
+  const name = document.getElementById('customName').value.trim();
+  const color = document.getElementById('customColor').value;
+  if (!name) return;
+  const id = 'custom_' + Date.now();
+  const emo = { id, name, color, quote: 'Твоя уникальная эмоция.', insight: 'Это ваша личная эмоция. Прислушайтесь к себе.' };
+  EMOTIONS.push(emo);
+  saveEmotions();
+  renderEditor();
+  document.getElementById('customName').value = '';
+};
+
+document.getElementById('galleryBtn').onclick = () => {
+  SoundEngine.init(); SoundEngine.playClick();
+  const list = document.getElementById('galleryList');
+  list.innerHTML = history.length ? '' : '<div style="color:var(--muted); padding:10px;">Пока пусто</div>';
+  [...history].reverse().forEach(day => {
+    const total = Object.values(day.volumes).reduce((a, b) => a + b, 0);
+    const sorted = Object.entries(day.volumes).sort((a, b) => b[1] - a[1]);
+    const dom = EMOTIONS.find(e => e.id === sorted[0]?.[0]);
+    const div = document.createElement('div');
+    div.className = 'gallery-item';
+    div.innerHTML = `<div><span class="color-dot" style="background:${dom?.color || '#888'}"></span>${day.date}</div><div style="font-weight:600">${total.toFixed(0)} мл</div>`;
+    div.onclick = () => showHistoryDetail(day);
+    list.appendChild(div);
+  });
+  document.getElementById('galleryModal').classList.add('show');
+};
+
+document.getElementById('clearHistoryBtn').onclick = () => {
+  SoundEngine.init(); SoundEngine.playClick();
+  if(confirm('Вы уверены, что хотите безвозвратно удалить всю историю?')) {
+    history = [];
+    localStorage.removeItem('kolbaHistory');
+    document.getElementById('galleryList').innerHTML = '<div style="color:var(--muted); padding:10px;">История очищена.</div>';
+  }
+};
+
+function showHistoryDetail(day) {
+  SoundEngine.init(); SoundEngine.playClick();
+  const total = Object.values(day.volumes).reduce((a, b) => a + b, 0);
+  const sorted = Object.entries(day.volumes).sort((a, b) => b[1] - a[1]);
+  const dom = EMOTIONS.find(e => e.id === sorted[0]?.[0]);
+  let html = `<h3 style="margin-bottom:12px; color:var(--text)">${day.date}</h3><div style="color:var(--accent); font-weight:600; margin-bottom:16px;">Всего: ${total.toFixed(0)} мл</div>`;
+  sorted.forEach(([id, ml]) => {
+    const emo = EMOTIONS.find(e => e.id === id);
+    if (!emo) return;
+    const pct = (ml / total * 100).toFixed(1);
+    html += `<div class="stat-row" style="margin-top:8px"><span><span class="color-dot" style="background:${emo.color}"></span>${emo.name}</span><span>${ml.toFixed(0)} мл (${pct}%)</span></div>`;
+  });
+  if (dom) html += `<div style="margin-top:16px; padding:12px; border-left:3px solid ${dom.color}; background:rgba(0,0,0,0.2); border-radius:8px; font-style:italic; color:var(--muted);">«${dom.quote}»</div>`;
+  document.getElementById('galleryList').innerHTML = html + `<button style="margin-top:20px; width:100%;" onclick="document.getElementById('galleryBtn').click()">Назад</button>`;
+}
+
+document.getElementById('exportBtn').onclick = () => {
+  SoundEngine.init(); SoundEngine.playClick();
+  const exp = document.createElement('canvas');
+  exp.width = 1200; exp.height = 800;
+  const e = exp.getContext('2d');
+  e.fillStyle = '#090b10'; e.fillRect(0, 0, 1200, 800);
+  const g = e.createRadialGradient(400, 400, 50, 400, 400, 400);
+  g.addColorStop(0, 'rgba(94,234,212,0.1)'); g.addColorStop(1, 'transparent');
+  e.fillStyle = g; e.fillRect(0, 0, 1200, 800);
+  e.drawImage(canvas, 80, 80, 480, 640); 
+  e.fillStyle = '#f0f4f8'; e.font = 'bold 42px system-ui';
+  e.fillText('Колба Дня', 620, 120);
+  e.font = '20px system-ui'; e.fillStyle = '#94a3b8';
+  e.fillText(new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }), 620, 160);
+  const total = getTotal();
+  e.fillStyle = '#f0f4f8'; e.font = 'bold 28px system-ui';
+  e.fillText(`Всего: ${total.toFixed(0)} мл`, 620, 230);
+  let y = 300;
+  const sorted = Object.entries(current).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  sorted.forEach(([id, ml]) => {
+    const emo = EMOTIONS.find(x => x.id === id);
+    if (!emo) return;
+    const pct = (ml / total * 100).toFixed(1);
+    e.fillStyle = emo.color; e.beginPath(); e.arc(630, y - 8, 8, 0, Math.PI*2); e.fill();
+    e.fillStyle = '#f0f4f8'; e.font = '20px system-ui';
+    e.fillText(`${emo.name}  —  ${ml.toFixed(0)} мл  (${pct}%)`, 660, y);
+    y += 45;
+  });
+  if (sorted.length > 0) {
+    const dom = EMOTIONS.find(x => x.id === sorted[0][0]);
+    if (dom) {
+      e.font = 'italic 22px system-ui'; e.fillStyle = '#94a3b8';
+      const words = dom.quote.split(' ');
+      let line = '«'; let lineY = y + 40;
+      for(let n = 0; n < words.length; n++) {
+        let testLine = line + words[n] + ' ';
+        let metrics = e.measureText(testLine);
+        if (metrics.width > 500 && n > 0) {
+          e.fillText(line, 620, lineY);
+          line = words[n] + ' '; lineY += 30;
+        } else { line = testLine; }
+      }
+      e.fillText(line + '»', 620, lineY);
+      e.fillStyle = dom.color; e.font = 'bold 16px system-ui';
+      e.fillText(`— ${dom.name}`, 620, lineY + 30);
+    }
+  }
+  const a = document.createElement('a');
+  a.href = exp.toDataURL('image/png');
+  a.download = `kolba-dnya-${new Date().toISOString().slice(0,10)}.png`;
+  a.click();
+};
+
+document.getElementById('muteBtn').onclick = () => {
+  SoundEngine.init();
+  const muted = SoundEngine.toggleMute(false);
+  document.getElementById('muteBtn').textContent = muted ? '🔇' : '🔊';
+};
+
+document.getElementById('clickSoundBtn').onclick = () => {
+  SoundEngine.init();
+  const on = SoundEngine.toggleInterfaceSounds();
+  document.getElementById('clickSoundBtn').textContent = on ? '🔔' : '🔕';
+};
+
+document.getElementById('volumeSlider').oninput = (e) => {
+  SoundEngine.init();
+  const v = e.target.value / 100;
+  SoundEngine.setVolume(v, false);
+  if (SoundEngine.muted && v > 0) {
+    SoundEngine.toggleMute(false);
+    document.getElementById('muteBtn').textContent = '🔊';
+  }
+};
+
+document.querySelectorAll('.layer-btn').forEach(btn => {
+  btn.onclick = () => {
+    SoundEngine.init();
+    const name = btn.dataset.layer;
+    const active = SoundEngine.toggleLayer(name);
+    btn.classList.toggle('active', active);
+    
+    if (name === 'metronome') {
+      document.getElementById('bpmSlider').disabled = !active;
+    }
+    
+    NetworkEngine.send({ type: 'toggle_layer', layer: name, active: active });
+  };
+});
+
+document.getElementById('bpmSlider').oninput = (e) => {
+  const bpm = parseInt(e.target.value);
+  document.getElementById('bpmDisplay').textContent = bpm + ' BPM';
+  SoundEngine.setBPM(bpm, false);
+};
+
+document.getElementById('copyLinkBtn').onclick = () => {
+  SoundEngine.playClick();
+  if (!NetworkEngine.myId) return;
+  const url = window.location.origin + window.location.pathname + '#' + NetworkEngine.myId;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('copyLinkBtn');
+    const originalText = btn.textContent;
+    btn.textContent = 'Скопировано!';
+    setTimeout(() => btn.textContent = originalText, 2000);
+  });
+};
+
+document.getElementById('syncDisconnectBtn').onclick = () => {
+  if (NetworkEngine.conn) {
+    NetworkEngine.conn.close();
+    NetworkEngine.conn = null;
+    NetworkEngine.friendId = null;
+    NetworkEngine.stopHeartbeat();
+    NetworkEngine.updateUI();
+  }
+};
+</script>
+</body>
+</html>
