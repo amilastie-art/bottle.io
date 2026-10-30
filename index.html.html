@@ -1066,7 +1066,7 @@ const NetworkEngine = {
 
     if (this.initAttempts >= this.maxAttempts) {
       if(idDisplay) idDisplay.textContent = 'Ошибка сети';
-      if(statusDisplay) statusDisplay.textContent = 'Нажмите "Пригласить" для повтора';
+      if(statusDisplay) statusDisplay.textContent = 'Нажмите "Пригласить" для повтора или работайте локально';
       if(dot) dot.className = 'sync-dot red';
       return;
     }
@@ -1074,43 +1074,49 @@ const NetworkEngine = {
     this.initAttempts++;
     
     if (this.initAttempts > 1) {
-      if(idDisplay) idDisplay.textContent = `Генерация... (Попытка ${this.initAttempts})`;
-      if(statusDisplay) statusDisplay.textContent = 'Переподключение...';
+      if(idDisplay) idDisplay.textContent = `Генерация... (Попытка ${this.initAttempts}/5)`;
+      if(statusDisplay) statusDisplay.textContent = 'Переподключение к PeerJS...';
     } else {
-      if(idDisplay) idDisplay.textContent = 'Генерация...';
-      if(statusDisplay) statusDisplay.textContent = 'Ожидание...';
+      if(idDisplay) idDisplay.textContent = 'Генерация ID...';
+      if(statusDisplay) statusDisplay.textContent = 'Подключение к серверу сигнализации...';
     }
 
-    const randomId = 'kolba-' + Math.random().toString(36).substring(2, 8);
-    
-    // Добавляем STUN-серверы для лучшего соединения P2P
-    this.peer = new Peer(randomId, {
+    // НЕ задаём свой ID — пусть сервер PeerJS сгенерирует надёжный
+    // Явно указываем хост (по умолчанию 0.peerjs.com) + secure + path
+    this.peer = new Peer({
       debug: 1,
+      host: '0.peerjs.com',
+      port: 443,
+      path: '/',
+      secure: true,
       config: {
-        'iceServers': [
+        iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' }
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:stun3.l.google.com:19302' },
+          { urls: 'stun:stun4.l.google.com:19302' }
         ]
       }
     });
 
-    // Таймаут на случай, если публичный сервер PeerJS завис
+    // Таймаут увеличен: облачный сервер PeerJS иногда отвечает очень долго
     this.retryTimeout = setTimeout(() => {
       if (!this.myId) {
         console.warn('Таймаут подключения к серверу сигнализации. Пробуем снова...');
         this.init();
       }
-    }, 8000); // Ждем 8 секунд
+    }, 20000); // 20 секунд
 
     this.peer.on('open', (id) => {
       clearTimeout(this.retryTimeout);
       this.myId = id;
-      this.initAttempts = 0; // Сбрасываем счетчик при успехе
+      this.initAttempts = 0;
       this.updateUI();
       
       const hash = window.location.hash.replace('#', '');
-      if (hash && hash !== id && hash.startsWith('kolba-')) {
+      // Убрали проверку startsWith('kolba-'), потому что ID теперь генерирует сервер
+      if (hash && hash !== id && hash.length > 4) {
         this.connect(hash);
       }
     });
@@ -1126,11 +1132,14 @@ const NetworkEngine = {
     });
 
     this.peer.on('error', (err) => {
-      console.error('PeerJS error:', err);
+      console.error('PeerJS error:', err.type, err);
       if (err.type === 'peer-unavailable') {
-        alert('Друг не найден. Проверьте ссылку. Возможно, он ещё не открыл страницу.');
+        alert('Друг не найден. Проверьте ссылку. Возможно, он ещё не открыл страницу или ID устарел.');
+      } else if (err.type === 'unavailable-id') {
+        // Редко, но если произошло — просто перезапускаем
+        this.init();
       } else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) {
-        this.init(); // Автоматический перезапуск при сбое сети
+        setTimeout(() => this.init(), 1500);
       }
     });
   },
