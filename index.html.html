@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Колба Дня</title>
-<script src="https://unpkg.com/@metered-ca/realtime@1/dist/index.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@metered-ca/realtime@1/dist/index.umd.js"></script>
 <style>
 :root {
   --bg: #090b10;
@@ -1048,29 +1048,27 @@ const NetworkEngine = {
   room: null,
   myId: null,
   connected: false,
-  apiKey: localStorage.getItem('meteredApiKey') || '',
+  apiKey: (() => {
+    const k = localStorage.getItem('meteredApiKey') || '';
+    return k.startsWith('pk_') ? k : '';
+  })(),
 
   async init() {
     const idDisplay = document.getElementById('syncMyId');
     const statusDisplay = document.getElementById('syncInfoText');
     const dot = document.getElementById('syncStatusDot');
 
+    // Если ключа нет — показываем поле ввода прямо в панели
     if (!this.apiKey) {
-      this.apiKey = prompt(
-        'Введите бесплатный ключ Metered (pk_live_...).\n\n' +
-        '1. Зарегистрируйтесь на https://dashboard.metered.ca\n' +
-        '2. Realtime Messaging → API Keys → Create key (Publishable)\n' +
-        '3. Обязательно поставьте галочку "Send"\n' +
-        '4. Скопируйте ключ и вставьте сюда',
-        ''
-      ) || '';
-      if (this.apiKey) localStorage.setItem('meteredApiKey', this.apiKey);
+      this.showKeyInput();
+      return;
     }
 
-    if (!this.apiKey || !this.apiKey.startsWith('pk_')) {
-      if (idDisplay) idDisplay.textContent = 'Нужен ключ';
-      if (statusDisplay) statusDisplay.textContent = 'Нажмите Пригласить и введите ключ';
+    if (!this.apiKey.startsWith('pk_')) {
+      if (idDisplay) idDisplay.textContent = 'Неверный ключ';
+      if (statusDisplay) statusDisplay.textContent = 'Нужен pk_live_..., не sk_';
       if (dot) dot.className = 'sync-dot red';
+      this.showKeyInput();
       return;
     }
 
@@ -1089,7 +1087,6 @@ const NetworkEngine = {
       this.peer.on('peer-joined', () => this.updateUI());
       this.peer.on('peer-left', () => this.updateUI());
 
-      // Комната из хэша или новая
       const hash = window.location.hash.replace('#', '').trim();
       this.room = hash || ('kolba-' + Math.random().toString(36).slice(2, 8));
       if (!hash) history.replaceState(null, '', '#' + this.room);
@@ -1098,14 +1095,39 @@ const NetworkEngine = {
       this.connected = true;
       this.myId = this.peer.peerId || this.room;
       this.updateUI();
-      this.syncState(); // отправить текущее состояние новым участникам
+      this.syncState();
     } catch (e) {
       console.error('Metered init error', e);
       if (idDisplay) idDisplay.textContent = 'Ошибка';
-      if (statusDisplay) statusDisplay.textContent = e.message || 'Не удалось подключиться';
+      if (statusDisplay) statusDisplay.textContent = (e.message || 'Не удалось подключиться').slice(0, 40);
       if (dot) dot.className = 'sync-dot red';
       this.connected = false;
     }
+  },
+
+  showKeyInput() {
+    const panel = document.querySelector('.sync-panel') || document.getElementById('syncInfoText')?.closest('div');
+    if (!panel || document.getElementById('meteredKeyInput')) return;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'margin-top:8px; display:flex; gap:4px;';
+    wrap.innerHTML = `
+      <input id="meteredKeyInput" placeholder="pk_live_..." style="flex:1; padding:6px; border-radius:6px; border:1px solid #444; background:#111; color:#fff; font-size:0.75rem;">
+      <button id="meteredKeySave" style="padding:6px 10px; background:var(--accent); color:#000; border:none; border-radius:6px; font-weight:600; cursor:pointer;">OK</button>
+    `;
+    panel.appendChild(wrap);
+
+    document.getElementById('meteredKeySave').onclick = () => {
+      const val = document.getElementById('meteredKeyInput').value.trim();
+      if (!val.startsWith('pk_')) {
+        alert('Нужен ключ вида pk_live_..., а не sk_...');
+        return;
+      }
+      this.apiKey = val;
+      localStorage.setItem('meteredApiKey', val);
+      wrap.remove();
+      this.init();
+    };
   },
 
   send(data) {
